@@ -12,7 +12,7 @@
 .button-primary { color: white; background: var(--green); }
 .button-primary:hover { background: #224c36; }
 .nav-signup { min-height: 40px; }
-.hero { position: relative; display: flex; min-height: 530px; align-items: center; overflow: hidden; padding: 60px max(10vw, 30px); color: white; background: #1b2e26 url("/src/assets/hero.png") center 56% / cover no-repeat; }
+.hero { position: relative; display: flex; min-height: 530px; align-items: center; overflow: hidden; padding: 60px max(10vw, 30px); color: white; background: #1b2e26 url("https://images.unsplash.com/photo-1618843479313-40f8afb4b4d8?auto=format&fit=crop&w=1800&q=85") center 56% / cover no-repeat; }
 .hero-shade { position: absolute; inset: 0; background: linear-gradient(90deg,rgba(14,30,22,.88) 0%,rgba(18,35,26,.76) 39%,rgba(16,27,22,.13) 100%),linear-gradient(0deg,rgba(8,16,12,.2),transparent 50%); }
 .hero-content { position: relative; max-width: 590px; padding: 12px 0 20px; }
 .hero-tag,.eyebrow { display: flex; align-items: center; gap: 10px; color: #c9d8ce; font-size: 10px; font-weight: 700; letter-spacing: 2px; }
