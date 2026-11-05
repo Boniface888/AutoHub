@@ -1,40 +1,6 @@
-function SearchBar() {
-  return (
-    <section className="search-section">
-      <div className="search-container">
-
-        <div className="search-tabs">
-          <button className="active-tab">Buy Cars</button>
-          <button>Rent Cars</button>
-        </div>
-
-        <div className="search-form">
-
-          <div className="search-field">
-            <label>What are you looking for?</label>
-            <input
-              type="text"
-              placeholder="Make, model or keyword"
-            />
-          </div>
-
-          <div className="search-field">
-            <label>Location</label>
-            <input
-              type="text"
-              placeholder="Accra, Kumasi..."
-            />
-          </div>
-
-          <button className="search-button">
-            Search Cars
-          </button>
-
-        </div>
-
-      </div>
-    </section>
-  );
+function SearchBar({ filters, onChange }) {
+  const type = filters?.type ?? "sale";
+  return <section className="search-section" aria-label="Search listings"><div className="search-container"><div className="search-tabs" role="tablist" aria-label="Listing type"><button role="tab" aria-selected={type === "sale"} className={type === "sale" ? "active-tab" : ""} onClick={() => onChange({ type: "sale" })}>Buy a car</button><button role="tab" aria-selected={type === "rent"} className={type === "rent" ? "active-tab" : ""} onClick={() => onChange({ type: "rent" })}>Rent a car</button></div><div className="search-form"><label className="search-field"><span>Make or model</span><div className="input-wrap"><span aria-hidden="true">⌕</span><input type="search" placeholder="e.g. Toyota, SUV" value={filters.search} onChange={(event) => onChange({ search: event.target.value })} /></div></label><label className="search-field"><span>Location</span><div className="input-wrap"><span aria-hidden="true">⌖</span><input type="search" placeholder="City or region" value={filters.location} onChange={(event) => onChange({ location: event.target.value })} /></div></label><label className="search-field price-field"><span>Max price (GH₵{type === "rent" ? " / day" : ""})</span><div className="input-wrap"><span aria-hidden="true">₵</span><input type="number" min="0" placeholder="Any price" value={filters.maxPrice} onChange={(event) => onChange({ maxPrice: event.target.value })} /></div></label></div></div></section>;
 }
 
 export default SearchBar;

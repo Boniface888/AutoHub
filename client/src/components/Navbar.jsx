@@ -1,22 +1,5 @@
-function Navbar() {
-  return (
-    <nav className="navbar">
-      <div className="logo">
-        AutoHub
-      </div>
-
-      <div className="nav-links">
-        <a href="#">Buy Cars</a>
-        <a href="#">Rent Cars</a>
-        <a href="#">Sell/Rent Your Car</a>
-      </div>
-
-      <div className="nav-actions">
-        <button>Login</button>
-        <button>Sign Up</button>
-      </div>
-    </nav>
-  );
+function Navbar({ user, onChoose = () => {}, onAction = () => {} }) {
+  return <header className="navbar" id="top"><a className="brand" href="#top" aria-label="AutoHub home"><span className="brand-mark">A</span><span>AutoHub</span></a><nav className="nav-links" aria-label="Main navigation"><a href="#browse" onClick={() => onChoose("sale")}>Buy</a><a href="#browse" onClick={() => onChoose("rent")}>Rent</a><a href="#browse" onClick={() => onAction(user ? "sell" : "signup")}>Sell your car</a></nav><div className="nav-actions">{user ? <>{user.role === "admin" && <button className="login-button" onClick={() => onAction("admin")}>Admin</button>}<span className="account-email">{user.email}</span><button className="login-button" onClick={() => onAction("logout")}>Log out</button></> : <><button className="login-button" onClick={() => onAction("login")}>Log in</button><button className="button button-primary nav-signup" onClick={() => onAction("signup")}>Sign up</button></>}</div></header>;
 }
 
 export default Navbar;
