@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 700" fill="none">
+  <defs>
+    <radialGradient id="showroomGlow" cx="71%" cy="50%" r="52%">
+      <stop offset="0" stop-color="#8ba994" stop-opacity=".34"/>
+      <stop offset=".58" stop-color="#55725e" stop-opacity=".14"/>
+      <stop offset="1" stop-color="#17281f" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="carBody" x1="760" y1="360" x2="1410" y2="530" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#e4e8df"/>
+      <stop offset=".28" stop-color="#aeb9af"/>
+      <stop offset=".58" stop-color="#65766a"/>
+      <stop offset="1" stop-color="#d7ded4"/>
+    </linearGradient>
+    <linearGradient id="glass" x1="930" y1="350" x2="1250" y2="425" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#344b3d"/>
+      <stop offset=".5" stop-color="#17271f"/>
+      <stop offset="1" stop-color="#51685a"/>
+    </linearGradient>
+    <radialGradient id="rim" cx="0" cy="0" r="1" gradientTransform="matrix(0 46 -46 0 0 0)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#dfe4dd"/>
+      <stop offset=".55" stop-color="#8a978d"/>
+      <stop offset=".59" stop-color="#293a30"/>
+      <stop offset="1" stop-color="#111c16"/>
+    </radialGradient>
+    <linearGradient id="road" x1="1000" y1="500" x2="1300" y2="700" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#07120d" stop-opacity="0"/>
+      <stop offset="1" stop-color="#070e0a" stop-opacity=".8"/>
+    </linearGradient>
+    <filter id="softBlur" x="500" y="200" width="1100" height="500" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse">
+      <feGaussianBlur stdDeviation="28"/>
+    </filter>
+  </defs>
+  <ellipse cx="1190" cy="405" rx="410" ry="210" fill="url(#showroomGlow)"/>
+  <path d="M520 640C800 561 1160 548 1600 603V700H520V640Z" fill="url(#road)"/>
+  <path d="M920 628C1104 594 1316 588 1530 612" stroke="#c6d2c8" stroke-opacity=".12" stroke-width="3" stroke-dasharray="30 27"/>
+  <path d="M661 555C867 516 1145 500 1468 524" stroke="#d5dfd7" stroke-opacity=".11" stroke-width="2"/>
+  <ellipse cx="1080" cy="548" rx="390" ry="50" fill="#07110c" fill-opacity=".58" filter="url(#softBlur)"/>
+  <path d="M650 452L756 415C806 397 854 379 922 367L1031 346C1112 330 1203 339 1273 365L1374 403L1433 418C1467 428 1487 453 1492 482L1474 511L1390 530H727L674 520C644 513 631 489 638 468L650 452Z" fill="url(#carBody)" stroke="#e1e7df" stroke-opacity=".7" stroke-width="3"/>
+  <path d="M849 393L926 376L1035 353C1111 337 1199 346 1260 373L1321 405L1206 411L1120 398L1008 402L914 417L849 393Z" fill="url(#glass)" stroke="#dbe2d9" stroke-opacity=".45" stroke-width="3"/>
+  <path d="M1040 354L1018 402M1194 350L1206 411" stroke="#aebbb0" stroke-opacity=".55" stroke-width="3"/>
+  <path d="M666 454L746 431L765 450L685 477L651 478" fill="#9e2e25" fill-opacity=".88"/>
+  <path d="M1404 421L1465 441L1477 466L1419 455L1397 438Z" fill="#f3e9cf" fill-opacity=".92"/>
+  <path d="M1415 424L1472 449" stroke="#fff8e7" stroke-opacity=".72" stroke-width="5"/>
+  <path d="M727 519C746 477 780 447 833 447C890 447 922 477 934 537M1193 537C1205 477 1238 444 1290 444C1346 444 1380 478 1390 530" stroke="#26392e" stroke-width="10"/>
+  <circle cx="836" cy="524" r="52" fill="#101a14" stroke="#aab5aa" stroke-width="5"/>
+  <circle cx="836" cy="524" r="37" fill="url(#rim)" stroke="#d0d7cf" stroke-opacity=".65" stroke-width="3"/>
+  <circle cx="836" cy="524" r="10" fill="#26382d"/>
+  <path d="M836 487V514M836 534V561M799 524H826M846 524H873M810 498L829 517M843 531L862 550M862 498L843 517M829 531L810 550" stroke="#e3e8e1" stroke-opacity=".8" stroke-width="4"/>
+  <circle cx="1290" cy="524" r="52" fill="#101a14" stroke="#aab5aa" stroke-width="5"/>
+  <circle cx="1290" cy="524" r="37" fill="url(#rim)" stroke="#d0d7cf" stroke-opacity=".65" stroke-width="3"/>
+  <circle cx="1290" cy="524" r="10" fill="#26382d"/>
+  <path d="M1290 487V514M1290 534V561M1253 524H1280M1300 524H1327M1264 498L1283 517M1297 531L1316 550M1316 498L1297 517M1283 531L1264 550" stroke="#e3e8e1" stroke-opacity=".8" stroke-width="4"/>
+  <path d="M959 456L1144 449M960 468L1141 461" stroke="#f5f7f2" stroke-opacity=".38" stroke-width="2"/>
+  <path d="M1010 493L1168 487" stroke="#26392e" stroke-opacity=".55" stroke-width="2"/>
+  <path d="M674 520L727 528M1390 530L1450 519" stroke="#18251d" stroke-width="6"/>
+  <path d="M744 414L827 390M1281 370L1368 402" stroke="#f6f7f2" stroke-opacity=".4" stroke-width="3"/>
+</svg>
