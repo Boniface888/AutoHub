@@ -14,6 +14,7 @@ import SellerSection from "./components/SellerSection";
 import BookingModal from "./components/BookingModal";
 import InquiryModal from "./components/InquiryModal";
 import RequestInbox from "./components/RequestInbox";
+import MyListings from "./components/MyListings";
 
 const cars = [
   { id: 1, name: "Toyota Camry", year: 2022, location: "Accra", transmission: "Automatic", fuel: "Petrol", price: 185000, status: "sale", image: "https://images.unsplash.com/photo-1621007947382-bb3c3994e3fb?auto=format&fit=crop&w=900&q=85", mileage: "28,000 km", body: "Sedan" },
@@ -38,6 +39,7 @@ function App() {
   const [bookingCar, setBookingCar] = useState(null);
   const [inquiryCar, setInquiryCar] = useState(null);
   const [requestInboxOpen, setRequestInboxOpen] = useState(false);
+  const [myListingsOpen, setMyListingsOpen] = useState(false);
   const [hasListings, setHasListings] = useState(false);
   const [requestCount, setRequestCount] = useState(0);
   const knownUnreadRequests = useRef(new Set());
@@ -113,10 +115,14 @@ function App() {
 
   const update = (patch) => setFilters((current) => ({ ...current, ...patch }));
   const handleRequestsRead = useCallback((remainingCount) => setRequestCount(remainingCount), []);
+  const handleOwnerListingsChanged = useCallback((count) => {
+    setHasListings(count > 0);
+    setListingRefresh((current) => current + 1);
+  }, []);
 
   return (
     <>
-      <Navbar user={user} hasListings={hasListings} requestCount={requestCount} onChoose={(type) => { update({ type }); document.getElementById("browse")?.scrollIntoView({ behavior: "smooth" }); }} onAction={(action) => action === "logout" ? fetch(`${apiBase}/api/auth/logout`, { method: "POST", credentials: "include" }).then(() => { setUser(null); setRequestCount(0); setHasListings(false); }) : action === "admin" ? setAdminOpen(true) : action === "requests" ? setRequestInboxOpen(true) : action === "list-section" ? document.getElementById("list-your-car")?.scrollIntoView({ behavior: "smooth" }) : action === "sell" && user ? (setListingType("sale"), setListingOpen(true)) : setAuthMode(action === "sell" ? "signup" : action)} />
+      <Navbar user={user} hasListings={hasListings} requestCount={requestCount} onChoose={(type) => { update({ type }); document.getElementById("browse")?.scrollIntoView({ behavior: "smooth" }); }} onAction={(action) => action === "logout" ? fetch(`${apiBase}/api/auth/logout`, { method: "POST", credentials: "include" }).then(() => { setUser(null); setRequestCount(0); setHasListings(false); }) : action === "admin" ? setAdminOpen(true) : action === "my-listings" ? setMyListingsOpen(true) : action === "requests" ? setRequestInboxOpen(true) : action === "list-section" ? document.getElementById("list-your-car")?.scrollIntoView({ behavior: "smooth" }) : action === "sell" && user ? (setListingType("sale"), setListingOpen(true)) : setAuthMode(action === "sell" ? "signup" : action)} />
       <main>
         <Hero user={user} onChoose={(type) => { update({ type }); document.getElementById("browse")?.scrollIntoView({ behavior: "smooth" }); }} />
         {user && (
@@ -144,6 +150,7 @@ function App() {
       {bookingCar && <BookingModal car={bookingCar} onClose={() => setBookingCar(null)} />}
       {inquiryCar && <InquiryModal car={inquiryCar} onClose={() => setInquiryCar(null)} />}
       {requestInboxOpen && <RequestInbox onClose={() => setRequestInboxOpen(false)} onRead={handleRequestsRead} />}
+      {myListingsOpen && <MyListings onClose={() => setMyListingsOpen(false)} onChanged={handleOwnerListingsChanged} />}
     </>
   );
 }

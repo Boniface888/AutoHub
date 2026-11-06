@@ -29,7 +29,10 @@ function Navbar({ user, hasListings = false, requestCount = 0, onChoose = () => 
           <a href="#browse" onClick={() => handleChoose("sale")}>Buy</a>
           <a href="#browse" onClick={() => handleChoose("rent")}>Rent</a>
           <a href="#list-your-car" onClick={() => handleAction("list-section")}>Sell your car</a>
-          {hasListings && <button className="nav-request-link" type="button" onClick={() => handleAction("requests")}>Requests{requestCount > 0 && <span className="nav-request-count" aria-label={`${requestCount} unread requests`}>{requestCount > 99 ? "99+" : requestCount}</span>}</button>}
+          {hasListings && <>
+            <button className="nav-request-link" type="button" onClick={() => handleAction("my-listings")}>My cars</button>
+            <button className="nav-request-link" type="button" onClick={() => handleAction("requests")}>Requests{requestCount > 0 && <span className="nav-request-count" aria-label={`${requestCount} unread requests`}>{requestCount > 99 ? "99+" : requestCount}</span>}</button>
+          </>}
         </nav>
       )}
 

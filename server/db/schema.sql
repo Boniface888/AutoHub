@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS listings (
   images JSONB NOT NULL DEFAULT '[]'::jsonb,
   contact_email TEXT,
   contact_phone TEXT,
-  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','active','rejected','removed','sold')),
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','active','rejected','removed','paused','sold','rented')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -43,7 +43,7 @@ CREATE INDEX IF NOT EXISTS listings_owner_idx ON listings (owner_id,created_at D
 
 CREATE TABLE IF NOT EXISTS bookings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  listing_id UUID NOT NULL REFERENCES listings(id) ON DELETE RESTRICT,
+  listing_id UUID NOT NULL REFERENCES listings(id) ON DELETE CASCADE,
   renter_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
   starts_at TIMESTAMPTZ NOT NULL,
   ends_at TIMESTAMPTZ NOT NULL,
@@ -75,3 +75,8 @@ ALTER TABLE bookings ADD COLUMN IF NOT EXISTS renter_phone TEXT;
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS owner_viewed_at TIMESTAMPTZ;
 ALTER TABLE listing_inquiries ADD COLUMN IF NOT EXISTS owner_viewed_at TIMESTAMPTZ;
 UPDATE listings AS listing SET contact_email = users.email FROM users WHERE listing.owner_id = users.id AND listing.contact_email IS NULL;
+
+ALTER TABLE bookings DROP CONSTRAINT IF EXISTS bookings_listing_id_fkey;
+ALTER TABLE bookings ADD CONSTRAINT bookings_listing_id_fkey FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE CASCADE;
+ALTER TABLE listings DROP CONSTRAINT IF EXISTS listings_status_check;
+ALTER TABLE listings ADD CONSTRAINT listings_status_check CHECK (status IN ('pending','active','rejected','removed','paused','sold','rented'));

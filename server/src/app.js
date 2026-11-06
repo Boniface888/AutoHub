@@ -35,6 +35,42 @@ async function sendOwnerEmail({ to, subject, text }) {
   } catch { return false; }
 }
 
+async function deleteListingPhotos(images, ownerId) {
+  if (!images.length) return true;
+  const { CLOUDINARY_CLOUD_NAME: cloudName, CLOUDINARY_API_KEY: apiKey, CLOUDINARY_API_SECRET: apiSecret } = process.env;
+  if (!cloudName || !apiKey || !apiSecret) return false;
+  const publicIds = images.map(({ url }) => {
+    try {
+      const pathname = new URL(url).pathname;
+      const prefix = `/${cloudName}/image/upload/`;
+      if (!pathname.startsWith(prefix)) return null;
+      const segments = pathname.slice(prefix.length).split("/");
+      const folderIndex = segments.indexOf("autohub");
+      if (folderIndex < 0 || segments[folderIndex + 1] !== "listings" || segments[folderIndex + 2] !== ownerId || segments.length !== folderIndex + 4) return null;
+      const imageId = segments[folderIndex + 3].replace(/\.[a-zA-Z0-9]+$/, "");
+      if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(imageId)) return null;
+      return `autohub/listings/${ownerId}/${imageId}`;
+    } catch { return null; }
+  });
+  if (publicIds.some((publicId) => !publicId)) return false;
+  const results = await Promise.all(publicIds.map(async (publicId) => {
+    const timestamp = Math.floor(Date.now() / 1000);
+    const signature = createHash("sha1").update(`public_id=${publicId}&timestamp=${timestamp}${apiSecret}`).digest("hex");
+    const form = new FormData();
+    form.set("public_id", publicId);
+    form.set("timestamp", String(timestamp));
+    form.set("api_key", apiKey);
+    form.set("signature", signature);
+    try {
+      const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/destroy`, { method: "POST", body: form, signal: AbortSignal.timeout(10_000) });
+      if (!response.ok) return false;
+      const data = await response.json();
+      return data.result === "ok" || data.result === "not found";
+    } catch { return false; }
+  }));
+  return results.every(Boolean);
+}
+
 app.disable("x-powered-by");
 app.set("trust proxy", 1);
 const contentSecurityPolicy = {
@@ -233,6 +269,50 @@ app.post("/api/listings/:id/inquiries", requireAuth, inquiryLimiter, async (req,
       text: `Someone is interested in your car listing: ${car.title}\n\nBuyer email: ${car.buyer_email}\nBuyer phone: ${inquiry.phone}\nMessage: ${inquiry.message || "No message included."}\n\nSign in to AutoHub to view your listing.`,
     });
     res.status(201).json({ inquiry: saved.rows[0], notificationSent, sellerContact: { email: car.contact_email, phone: car.contact_phone } });
+  } catch (error) { next(error); }
+});
+
+app.get("/api/owner/listings", requireAuth, async (req, res, next) => {
+  try {
+    const result = await query(
+      `SELECT id,title,make,model,year,location,price,type,status,image_url AS "imageUrl",images,created_at AS "createdAt"
+       FROM listings WHERE owner_id=$1 ORDER BY created_at DESC`,
+      [req.auth.sub],
+    );
+    res.json({ listings: result.rows });
+  } catch (error) { next(error); }
+});
+
+app.patch("/api/owner/listings/:id/status", requireAuth, async (req, res, next) => {
+  try {
+    const id = z.string().uuid().parse(req.params.id);
+    const { action } = z.object({ action: z.enum(["take_down", "restore", "complete"]) }).parse(req.body);
+    const updated = await query(
+      `UPDATE listings
+       SET status=CASE WHEN $3='take_down' THEN 'paused' WHEN $3='restore' THEN 'active' WHEN type='sale' THEN 'sold' ELSE 'rented' END, updated_at=NOW()
+       WHERE id=$1 AND owner_id=$2 AND (($3='take_down' AND status='active') OR ($3='restore' AND status='paused') OR ($3='complete' AND status='active'))
+       RETURNING id,type,status`,
+      [id, req.auth.sub, action],
+    );
+    if (updated.rows[0]) return res.json({ listing: updated.rows[0] });
+    const existing = await query("SELECT type FROM listings WHERE id=$1 AND owner_id=$2", [id, req.auth.sub]);
+    if (!existing.rows[0]) return res.status(404).json({ error: "Listing not found." });
+    const noun = existing.rows[0].type === "sale" ? "sale" : "rental";
+    res.status(409).json({ error: `This ${noun} listing cannot perform that action in its current status.` });
+  } catch (error) { next(error); }
+});
+
+app.delete("/api/owner/listings/:id", requireAuth, async (req, res, next) => {
+  try {
+    const id = z.string().uuid().parse(req.params.id);
+    const listing = await query("SELECT id,type,images,image_url AS \"imageUrl\" FROM listings WHERE id=$1 AND owner_id=$2", [id, req.auth.sub]);
+    if (!listing.rows[0]) return res.status(404).json({ error: "Listing not found." });
+    const images = Array.isArray(listing.rows[0].images) ? listing.rows[0].images : [];
+    const imageRecords = images.length ? images : listing.rows[0].imageUrl ? [{ url: listing.rows[0].imageUrl }] : [];
+    const deleted = await query("DELETE FROM listings WHERE id=$1 AND owner_id=$2 RETURNING id,type", [id, req.auth.sub]);
+    if (!deleted.rows[0]) return res.status(404).json({ error: "Listing not found." });
+    const imagesRemoved = await deleteListingPhotos(imageRecords, req.auth.sub);
+    res.json({ deleted: deleted.rows[0], imagesRemoved });
   } catch (error) { next(error); }
 });
 
