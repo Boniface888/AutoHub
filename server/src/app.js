@@ -1,5 +1,5 @@
 import express from "express";
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import helmet from "helmet";
 import cors from "cors";
 import cookieParser from "cookie-parser";
@@ -8,7 +8,7 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { fileURLToPath } from "node:url";
 import { pool, query } from "./db.js";
-import { bookingSchema, credentialsSchema, listingSchema } from "./validation.js";
+import { bookingSchema, credentialsSchema, emailSchema, listingSchema, resetPasswordSchema } from "./validation.js";
 import { clearSession, issueSession, requireAdmin, requireAuth } from "./security.js";
 
 export const app = express();
@@ -66,6 +66,72 @@ app.post("/api/auth/login", authLimiter, async (req, res, next) => {
     issueSession(res, user);
     res.json({ user: { id: user.id, email: user.email, role: user.role } });
   } catch (error) { next(error); }
+});
+
+app.post("/api/auth/forgot-password", authLimiter, async (req, res, next) => {
+  try {
+    const { email } = emailSchema.parse(req.body);
+    const { RESEND_API_KEY: resendApiKey, EMAIL_FROM: emailFrom } = process.env;
+    if (!resendApiKey || !emailFrom) return res.status(503).json({ error: "Password reset email is not configured yet." });
+
+    const genericMessage = "If an account uses that email, we’ll send a password reset link shortly.";
+    const account = await query("SELECT id FROM users WHERE email = $1", [email]);
+    if (account.rows[0]) {
+      const token = randomBytes(32).toString("hex");
+      const tokenHash = createHash("sha256").update(token).digest("hex");
+      await query(
+        "INSERT INTO password_reset_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 minutes') ON CONFLICT (user_id) DO UPDATE SET token_hash = EXCLUDED.token_hash, expires_at = EXCLUDED.expires_at, created_at = NOW()",
+        [account.rows[0].id, tokenHash],
+      );
+      const appUrl = (process.env.APP_URL || frontendOrigin).replace(/\/$/, "");
+      const resetUrl = new URL("/", appUrl);
+      resetUrl.searchParams.set("resetToken", token);
+      void fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${resendApiKey}`, "Content-Type": "application/json" },
+        signal: AbortSignal.timeout(10_000),
+        body: JSON.stringify({
+          from: emailFrom,
+          to: [email],
+          subject: "Reset your AutoHub password",
+          text: `We received a request to reset your AutoHub password. Use this link within 30 minutes: ${resetUrl.href}\n\nIf you did not request this, you can ignore this email.`,
+          html: `<p>We received a request to reset your AutoHub password.</p><p><a href="${resetUrl.href}">Choose a new password</a></p><p>This link expires in 30 minutes. If you did not request this, you can ignore this email.</p>`,
+        }),
+      }).then((emailResponse) => {
+        if (!emailResponse.ok) throw new Error("Email provider rejected the reset email.");
+      }).catch(async () => {
+        try { await query("DELETE FROM password_reset_tokens WHERE user_id = $1", [account.rows[0].id]); } catch {}
+        console.error("Password reset email could not be delivered.");
+      });
+    }
+    res.status(202).json({ message: genericMessage });
+  } catch (error) { next(error); }
+});
+
+app.post("/api/auth/reset-password", authLimiter, async (req, res, next) => {
+  const client = await pool.connect();
+  try {
+    const { token, password } = resetPasswordSchema.parse(req.body);
+    const tokenHash = createHash("sha256").update(token).digest("hex");
+    await client.query("BEGIN");
+    const reset = await client.query(
+      "SELECT user_id FROM password_reset_tokens WHERE token_hash = $1 AND expires_at > NOW() FOR UPDATE",
+      [tokenHash],
+    );
+    if (!reset.rows[0]) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ error: "That password reset link is invalid or has expired. Request a new one." });
+    }
+    const passwordHash = await bcrypt.hash(password, 12);
+    await client.query("UPDATE users SET password_hash = $1 WHERE id = $2", [passwordHash, reset.rows[0].user_id]);
+    await client.query("DELETE FROM password_reset_tokens WHERE user_id = $1", [reset.rows[0].user_id]);
+    await client.query("COMMIT");
+    clearSession(res);
+    res.json({ message: "Your password has been changed. Sign in with your new password." });
+  } catch (error) {
+    await client.query("ROLLBACK");
+    next(error);
+  } finally { client.release(); }
 });
 
 app.post("/api/auth/logout", (_req, res) => { clearSession(res); res.status(204).end(); });

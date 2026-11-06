@@ -26,7 +26,7 @@ Register an account in the app, then promote it from the project root with `npm 
 - `POST /api/bookings` sends a date request for an active rental listing.
 - `/api/admin/listings` lets administrators review and publish or reject listings.
 
-Account sessions use HTTP-only, same-site cookies. Set `FRONTEND_ORIGIN` to the exact deployed frontend origin before production use, and serve the API over HTTPS in production. Signed-in sellers can upload 3–10 photos directly from their phone or computer. A front, rear, and interior view are required. Photos are stored in Cloudinary, and the gallery is saved with the listing in PostgreSQL. New listings appear in the matching sale or rental results after submission. Payment processing is not included.
+Account sessions use HTTP-only, same-site cookies. Set `FRONTEND_ORIGIN` to the exact deployed frontend origin before production use, and serve the API over HTTPS in production. Signed-in sellers can upload 3–10 photos directly from their phone or computer. A front, rear, and interior view are required. Photos are stored in Cloudinary, and the gallery is saved with the listing in PostgreSQL. New listings appear in the matching sale or rental results after submission. Password recovery uses one-time links that expire after 30 minutes. Configure `RESEND_API_KEY` and `EMAIL_FROM` in Render (and `APP_URL` for the public site); Resend requires a verified sending domain for production email. Payment processing is not included.
 
 ## Public preview deploy
 

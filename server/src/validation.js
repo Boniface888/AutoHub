@@ -1,7 +1,15 @@
 import { z } from "zod";
 
-export const credentialsSchema = z.object({
+export const emailSchema = z.object({
   email: z.string().trim().email().max(254).transform((value) => value.toLowerCase()),
+});
+
+export const resetPasswordSchema = z.object({
+  token: z.string().regex(/^[a-f0-9]{64}$/),
+  password: z.string().min(10).max(128),
+});
+
+export const credentialsSchema = emailSchema.extend({
   password: z.string().min(10).max(128),
 });
 

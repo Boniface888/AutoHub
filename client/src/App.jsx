@@ -28,7 +28,8 @@ function App() {
   const [notice, setNotice] = useState("");
   const [apiListings, setApiListings] = useState(null);
   const [apiAvailable, setApiAvailable] = useState(false);
-  const [authMode, setAuthMode] = useState(null);
+  const [resetToken] = useState(() => new URLSearchParams(window.location.search).get("resetToken") || "");
+  const [authMode, setAuthMode] = useState(() => resetToken ? "reset" : null);
   const [adminOpen, setAdminOpen] = useState(false);
   const [listingOpen, setListingOpen] = useState(false);
   const [listingType, setListingType] = useState("sale");
@@ -95,7 +96,7 @@ function App() {
       </main>
       <footer className={`site-footer${user ? "" : " site-footer-guest"}`}><a className="brand" href="#top"><span className="brand-mark">A</span> AutoHub</a><span>{user ? "Find your next drive." : "Made for the way Ghana moves."}</span><span>© {new Date().getFullYear()} AutoHub Ghana</span></footer>
       {notice && <div className="toast" role="status">{notice}<button onClick={() => setNotice("")} aria-label="Dismiss">×</button></div>}
-      {authMode && <AuthModal mode={authMode} onClose={() => setAuthMode(null)} onSuccess={(nextUser) => { setUser(nextUser); setAuthMode(null); }} />}
+      {authMode && <AuthModal mode={authMode} resetToken={resetToken} onClose={() => setAuthMode(null)} onSuccess={(nextUser) => { setUser(nextUser); setAuthMode(null); }} />}
       {adminOpen && user?.role === "admin" && <AdminDashboard onClose={() => setAdminOpen(false)} />}
       {listingOpen && <ListingForm initialType={listingType} onClose={() => setListingOpen(false)} onSuccess={() => { setListingOpen(false); update({ type: listingType, search: "", location: "", maxPrice: "" }); setListingRefresh((tick) => tick + 1); setNotice("Your car listing is now live."); }} />}
       {selectedCar && <div className="modal-backdrop" role="presentation" onClick={() => setSelectedCar(null)}><section className="detail-modal" role="dialog" aria-modal="true" aria-labelledby="detail-title" onClick={(event) => event.stopPropagation()}><button className="modal-close" onClick={() => setSelectedCar(null)} aria-label="Close">×</button><CarGallery images={selectedCar.images || []} fallbackImage={selectedCar.image} alt={selectedCar.name} /><div className="modal-content"><p className="eyebrow">{selectedCar.status === "sale" ? "FOR SALE" : "AVAILABLE TO RENT"} · {selectedCar.location.toUpperCase()}</p><h2 id="detail-title">{selectedCar.name}</h2><div className="detail-specs"><span>{selectedCar.year}</span><span>{selectedCar.transmission}</span><span>{selectedCar.fuel}</span><span>{selectedCar.mileage}</span></div><strong className="modal-price">GH₵ {selectedCar.price.toLocaleString()}{selectedCar.rate ? <small> / day</small> : ""}</strong><p>{selectedCar.description || (user ? (selectedCar.status === "rent" ? "Choose your dates and send a rental request to the owner." : "Contact the listing owner to learn more and arrange a viewing.") : "Sign in or create an account to contact sellers and request rentals.")}</p><button className="button button-primary" onClick={() => { const car = selectedCar; setSelectedCar(null); if (!user) setAuthMode("login"); else if (car.status === "rent") { if (typeof car.id === "string") setBookingCar(car); else setNotice("Rental requests are available for active database listings."); } else setNotice("Contact details will be available once a seller profile is set up."); }}>{user ? (selectedCar.status === "rent" ? "Request rental" : "Contact seller") : "Sign in to continue"}</button></div></section></div>}
