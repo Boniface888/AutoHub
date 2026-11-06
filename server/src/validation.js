@@ -5,6 +5,11 @@ export const credentialsSchema = z.object({
   password: z.string().min(10).max(128),
 });
 
+const listingImageSchema = z.object({
+  url: z.string().url().max(2048).refine((value) => value.startsWith("https://"), "Use a secure HTTPS photo URL."),
+  view: z.enum(["front", "rear", "interior", "other"]),
+});
+
 export const listingSchema = z.object({
   title: z.string().trim().min(3).max(100),
   description: z.string().trim().max(4000).default(""),
@@ -17,7 +22,14 @@ export const listingSchema = z.object({
   body: z.string().trim().min(2).max(40),
   price: z.number().positive().max(100_000_000),
   type: z.enum(["sale", "rent"]),
+  images: z.array(listingImageSchema).min(3).max(10),
   imageUrl: z.string().url().max(2048).refine((value) => value.startsWith("https://"), "Use a secure HTTPS photo URL.").optional(),
+}).superRefine((listing, context) => {
+  for (const view of ["front", "rear", "interior"]) {
+    if (!listing.images.some((image) => image.view === view)) {
+      context.addIssue({ code: "custom", path: ["images"], message: "Add front, rear, and interior photos." });
+    }
+  }
 });
 
 export const bookingSchema = z.object({

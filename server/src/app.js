@@ -1,4 +1,5 @@
 import express from "express";
+import { createHash } from "node:crypto";
 import helmet from "helmet";
 import cors from "cors";
 import cookieParser from "cookie-parser";
@@ -17,10 +18,16 @@ const allowedOrigins = new Set([frontendOrigin, "http://localhost:5173", "http:/
 const originAllowed = (origin, req) => isProduction ? origin === `${req.protocol}://${req.get("host")}` : Boolean(origin && allowedOrigins.has(origin));
 const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 10, standardHeaders: "draft-8", legacyHeaders: false, message: { error: "Too many attempts. Try again shortly." } });
 const apiLimiter = rateLimit({ windowMs: 60 * 1000, limit: 120, standardHeaders: "draft-8", legacyHeaders: false });
+const imageSignatureLimiter = rateLimit({ windowMs: 60 * 1000, limit: 30, standardHeaders: "draft-8", legacyHeaders: false });
 
 app.disable("x-powered-by");
 app.set("trust proxy", 1);
-app.use(helmet());
+const contentSecurityPolicy = {
+  ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+  "img-src": ["'self'", "data:", "blob:", "https://res.cloudinary.com", "https://images.unsplash.com"],
+  "connect-src": ["'self'", "https://api.cloudinary.com"],
+};
+app.use(helmet({ contentSecurityPolicy: { directives: contentSecurityPolicy } }));
 app.use(cors({ origin: (origin, callback) => callback(null, !isProduction && (!origin || allowedOrigins.has(origin))), credentials: true, methods: ["GET", "POST", "PATCH", "DELETE"] }));
 app.use(express.json({ limit: "32kb" }));
 app.use(cookieParser());
@@ -70,6 +77,19 @@ app.get("/api/auth/me", requireAuth, async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
+app.post("/api/media/signature", requireAuth, imageSignatureLimiter, (req, res) => {
+  const { CLOUDINARY_CLOUD_NAME: cloudName, CLOUDINARY_API_KEY: apiKey, CLOUDINARY_API_SECRET: apiSecret } = process.env;
+  if (!cloudName || !apiKey || !apiSecret) return res.status(503).json({ error: "Car photo uploads are not configured yet." });
+
+  const { imageId } = z.object({ imageId: z.string().uuid() }).parse(req.body);
+  const timestamp = Math.floor(Date.now() / 1000);
+  const folder = `autohub/listings/${req.auth.sub}`;
+  const allowedFormats = "jpg,jpeg,png,webp";
+  const params = { allowed_formats: allowedFormats, folder, public_id: imageId, timestamp };
+  const toSign = Object.entries(params).sort(([left], [right]) => left.localeCompare(right)).map(([key, value]) => `${key}=${value}`).join("&");
+  const signature = createHash("sha1").update(`${toSign}${apiSecret}`).digest("hex");
+  res.json({ cloudName, apiKey, timestamp, folder, allowedFormats, publicId: imageId, signature });
+});
 app.get("/api/listings", async (req, res, next) => {
   try {
     const params = z.object({ type: z.enum(["sale", "rent"]).optional(), search: z.string().trim().max(80).optional(), location: z.string().trim().max(100).optional(), maxPrice: z.coerce.number().positive().optional(), sort: z.enum(["price_asc", "price_desc", "newest"]).default("newest"), page: z.coerce.number().int().min(1).default(1), pageSize: z.coerce.number().int().min(1).max(48).default(12) }).parse(req.query);
@@ -86,7 +106,7 @@ app.get("/api/listings", async (req, res, next) => {
     if (params.maxPrice) add("price <= ?", params.maxPrice);
     const order = { price_asc: "price ASC", price_desc: "price DESC", newest: "created_at DESC" }[params.sort];
     const offset = (params.page - 1) * params.pageSize;
-    const sql = `SELECT id, title, description, make, model, year, location, transmission, fuel, body, price, type, image_url AS "imageUrl", created_at FROM listings WHERE ${filters.join(" AND ")} ORDER BY ${order} LIMIT $${values.length + 1} OFFSET $${values.length + 2}`;
+    const sql = `SELECT id, title, description, make, model, year, location, transmission, fuel, body, price, type, image_url AS "imageUrl", images, created_at FROM listings WHERE ${filters.join(" AND ")} ORDER BY ${order} LIMIT $${values.length + 1} OFFSET $${values.length + 2}`;
     const result = await query(sql, [...values, params.pageSize, offset]);
     const count = await query(`SELECT COUNT(*)::int AS total FROM listings WHERE ${filters.join(" AND ")}`, values);
     res.json({ listings: result.rows, total: count.rows[0].total, page: params.page, pageSize: params.pageSize });
@@ -96,7 +116,18 @@ app.get("/api/listings", async (req, res, next) => {
 app.post("/api/listings", requireAuth, async (req, res, next) => {
   try {
     const listing = listingSchema.parse(req.body);
-    const result = await query("INSERT INTO listings (owner_id,title,description,make,model,year,location,transmission,fuel,body,price,type,image_url,status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'pending') RETURNING *", [req.auth.sub, listing.title, listing.description, listing.make, listing.model, listing.year, listing.location, listing.transmission, listing.fuel, listing.body, listing.price, listing.type, listing.imageUrl ?? null]);
+    const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+    if (!cloudName) return res.status(503).json({ error: "Car photo uploads are not configured yet." });
+    const expectedPrefix = `/${cloudName}/image/upload/`;
+    const allImagesFromCloudinary = listing.images.every(({ url }) => {
+      const parsedUrl = new URL(url);
+      return parsedUrl.hostname === "res.cloudinary.com" && parsedUrl.pathname.startsWith(expectedPrefix);
+    });
+    if (!allImagesFromCloudinary) return res.status(400).json({ error: "Select and upload your car photos before submitting." });
+    const viewOrder = { front: 0, rear: 1, interior: 2, other: 3 };
+    const listingImages = [...listing.images].sort((left, right) => viewOrder[left.view] - viewOrder[right.view]);
+    const imageUrl = listingImages[0].url;
+    const result = await query("INSERT INTO listings (owner_id,title,description,make,model,year,location,transmission,fuel,body,price,type,image_url,images,status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb,'active') RETURNING *", [req.auth.sub, listing.title, listing.description, listing.make, listing.model, listing.year, listing.location, listing.transmission, listing.fuel, listing.body, listing.price, listing.type, imageUrl, JSON.stringify(listingImages)]);
     res.status(201).json({ listing: result.rows[0] });
   } catch (error) { next(error); }
 });

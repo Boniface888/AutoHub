@@ -5,7 +5,7 @@ services:
     plan: free
     region: frankfurt
     buildCommand: npm ci && npm --prefix client ci --include=dev && npm --prefix client run build
-    startCommand: npm start
+    startCommand: npm run db:migrate && npm start
     healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
@@ -14,3 +14,9 @@ services:
         sync: false
       - key: JWT_SECRET
         generateValue: true
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false

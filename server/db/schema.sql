@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS listings (
   price NUMERIC(12,2) NOT NULL CHECK (price > 0),
   type TEXT NOT NULL CHECK (type IN ('sale','rent')),
   image_url TEXT,
+  images JSONB NOT NULL DEFAULT '[]'::jsonb,
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','active','rejected','removed','sold')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -43,3 +44,5 @@ CREATE TABLE IF NOT EXISTS bookings (
 );
 
 CREATE INDEX IF NOT EXISTS bookings_availability_idx ON bookings (listing_id,starts_at,ends_at) WHERE status IN ('requested','confirmed');
+
+ALTER TABLE listings ADD COLUMN IF NOT EXISTS images JSONB NOT NULL DEFAULT '[]'::jsonb;

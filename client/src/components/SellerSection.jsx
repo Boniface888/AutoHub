@@ -20,7 +20,7 @@ function SellerSection({ onChoose }) {
           <button className="button button-outline" onClick={() => onChoose("rent")}>List a car for rent <span aria-hidden="true">→</span></button>
         </article>
       </div>
-      <p className="seller-review-note"><span aria-hidden="true">✓</span> Every listing is reviewed before it appears in the marketplace.</p>
+      <p className="seller-review-note"><span aria-hidden="true">✓</span> Your car appears in the matching sale or rental listings after you submit.</p>
     </section>
   );
 }

@@ -9,5 +9,10 @@ export async function getListings(filters, signal) {
   const response = await fetch(`${apiBase}/api/listings?${search}`, { signal, credentials: "include" });
   if (!response.ok) throw new Error("Could not load listings.");
   const data = await response.json();
-  return data.listings.map((listing) => ({ ...listing, status: listing.type, image: listing.imageUrl || "/hero-car.svg", mileage: "Contact for details" }));
+  return data.listings.map((listing) => {
+    const images = Array.isArray(listing.images) && listing.images.length
+      ? listing.images
+      : listing.imageUrl ? [{ url: listing.imageUrl, view: "front" }] : [];
+    return { ...listing, images, status: listing.type, image: images.find((image) => image.view === "front")?.url || images[0]?.url || "/hero-car.svg", mileage: "Contact for details" };
+  });
 }

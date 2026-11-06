@@ -240,3 +240,49 @@
 .seller-option:hover { transform: translateY(-2px); box-shadow: 0 12px 30px rgba(33,47,37,.07); }
 @media (max-width: 700px) { .seller-section { padding: 58px 20px 52px; } .seller-options { gap: 12px; } .seller-option { min-height: 230px; padding: 21px; } }
 @media (max-width: 560px) { .seller-section { padding: 45px 14px; } .seller-heading h2 { font-size: 30px; } .seller-options { grid-template-columns: 1fr; gap: 11px; } .seller-option { min-height: 205px; padding: 20px; } .seller-option h3 { margin-top: 14px; font-size: 22px; } .seller-review-note { align-items: flex-start; line-height: 1.6; } }
+
+.listing-photo-field { min-width: 0; }
+.listing-photo-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.listing-photo-heading > label { display: block; color: #586258; font-size: 10px; font-weight: 700; }
+.photo-count { color: #8a8e85; font-size: 9px; font-weight: 600; }
+.photo-count.is-ready { color: #3e704c; }
+.photo-help { margin: 5px 0 10px; color: #858980; font-size: 10px; line-height: 1.55; }
+.photo-picker { display: flex; min-height: 76px; align-items: center; gap: 13px; padding: 13px 15px; border: 1px dashed #aebcaf; border-radius: 4px; color: #3d5744; background: #f7f8f4; cursor: pointer; transition: border-color .2s, background .2s; }
+.photo-picker:hover { border-color: #587962; background: #f0f4ef; }
+.photo-picker-icon { display: grid; width: 34px; height: 34px; flex: 0 0 34px; place-items: center; border: 1px solid #d9e2d9; border-radius: 50%; font-size: 21px; }
+.photo-picker strong,.photo-picker small { display: block; }
+.photo-picker strong { font-size: 11px; }
+.photo-picker small { margin-top: 4px; color: #7b847a; font-size: 9px; font-weight: 400; line-height: 1.4; }
+.photo-file-input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); clip-path: inset(50%); white-space: nowrap; }
+.photo-picker:focus-within { outline: 2px solid var(--green); outline-offset: 3px; }
+.listing-photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(125px, 1fr)); gap: 9px; margin-top: 12px; }
+.listing-photo-card { position: relative; min-width: 0; overflow: hidden; border: 1px solid #e3e5dc; border-radius: 4px; background: white; }
+.listing-photo-card > img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; background: #eef0eb; }
+.listing-photo-card-controls { display: grid; grid-template-columns: 1fr auto; gap: 5px 4px; padding: 7px; }
+.photo-view-label { grid-column: 1 / -1; color: #7f847b; font-size: 8px; font-weight: 600; }
+.listing-photo-card-controls select { width: 100%; min-width: 0; height: 30px; padding: 0 4px; color: #36483b; border: 1px solid #e1e3dc; border-radius: 3px; background: white; font-size: 9px; }
+.photo-remove { padding: 0 5px; color: #8b5149; border: 0; background: transparent; font-size: 9px; cursor: pointer; }
+.photo-uploaded { position: absolute; top: 6px; left: 6px; padding: 4px 6px; color: white; border-radius: 2px; background: #31583fdd; font-size: 8px; }
+.listing-upload-status { margin: 0; color: #42684b; font-size: 10px; }
+.listing-photo-field + .wide { margin-top: 2px; }
+.car-photo-count { position: absolute; right: 13px; top: 13px; padding: 7px 9px; color: #37483b; border-radius: 20px; background: #ffffffed; font-size: 9px; font-weight: 700; }
+.car-gallery { display: flex; min-width: 0; min-height: 370px; flex-direction: column; background: #e9ebe5; }
+.gallery-main { position: relative; min-height: 290px; flex: 1; overflow: hidden; }
+.gallery-main > img { display: block; width: 100%; height: 100%; min-height: inherit; object-fit: cover; }
+.gallery-arrow { position: absolute; top: 50%; display: grid; width: 34px; height: 34px; place-items: center; transform: translateY(-50%); color: #28372d; border: 0; border-radius: 50%; background: #fffffff0; font-size: 24px; line-height: 1; cursor: pointer; }
+.gallery-previous { left: 11px; }
+.gallery-next { right: 11px; }
+.gallery-count { position: absolute; right: 10px; bottom: 10px; padding: 6px 8px; color: white; border-radius: 2px; background: #17251ccc; font-size: 9px; }
+.gallery-thumbnails { display: flex; gap: 7px; overflow-x: auto; padding: 8px; background: white; scrollbar-width: thin; }
+.gallery-thumbnails button { position: relative; width: 76px; height: 54px; flex: 0 0 76px; overflow: hidden; padding: 0; border: 1px solid transparent; border-radius: 2px; background: #f0f1ed; cursor: pointer; }
+.gallery-thumbnails button.is-active { border-color: #31583f; box-shadow: 0 0 0 1px #31583f; }
+.gallery-thumbnails img { width: 100%; height: 100%; object-fit: cover; }
+.gallery-thumbnails button > span { position: absolute; right: 2px; bottom: 2px; left: 2px; overflow: hidden; padding: 3px; color: white; background: #17251ccc; font-size: 7px; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 560px) {
+  .listing-photo-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .photo-picker { align-items: flex-start; }
+  .photo-picker small { max-width: 36ch; }
+  .detail-modal > .car-gallery { min-height: 0; }
+  .gallery-main { min-height: 220px; flex: 0 0 220px; }
+  .gallery-thumbnails { padding: 7px; }
+}
