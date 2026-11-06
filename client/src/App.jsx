@@ -89,7 +89,7 @@ function App() {
           </>
         )}
       </main>
-      {user && <footer className="site-footer"><a className="brand" href="#top"><span className="brand-mark">A</span> AutoHub</a><span>Find your next drive.</span><span>© {new Date().getFullYear()} AutoHub Ghana</span></footer>}
+      <footer className={`site-footer${user ? "" : " site-footer-guest"}`}><a className="brand" href="#top"><span className="brand-mark">A</span> AutoHub</a><span>{user ? "Find your next drive." : "Made for the way Ghana moves."}</span><span>© {new Date().getFullYear()} AutoHub Ghana</span></footer>
       {notice && <div className="toast" role="status">{notice}<button onClick={() => setNotice("")} aria-label="Dismiss">×</button></div>}
       {authMode && <AuthModal mode={authMode} onClose={() => setAuthMode(null)} onSuccess={(nextUser) => { setUser(nextUser); setAuthMode(null); }} />}
       {adminOpen && user?.role === "admin" && <AdminDashboard onClose={() => setAdminOpen(false)} />}

@@ -175,3 +175,6 @@
   .hero-guest h1 { font-size: clamp(48px, 13vw, 64px); }
   .hero-guest .hero-description { font-size: 14px; }
 }
+.site-footer-guest { min-height: 76px; padding-top: 15px; padding-bottom: 15px; background: #f6f5f1; }
+.site-footer-guest > span:nth-child(2) { color: #536958; font-size: 11px; letter-spacing: .15px; }
+@media (max-width: 560px) { .site-footer-guest { justify-content: center; gap: 8px 16px; padding: 14px 20px; text-align: center; } .site-footer-guest > span:nth-child(2) { order: 1; flex-basis: 100%; } }
