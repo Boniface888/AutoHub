@@ -34,15 +34,21 @@ function App() {
   const [user, setUser] = useState(null);
 
   useEffect(() => {
+    if (!user) return undefined;
+
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
       getListings(filters, controller.signal)
         .then((listings) => { setApiListings(listings); setApiAvailable(true); })
-        .catch(() => { if (!controller.signal.aborted) { setApiListings(null); setApiAvailable(false); } });
+        .catch(() => {
+          if (!controller.signal.aborted) {
+            setApiListings(null);
+            setApiAvailable(false);
+          }
+        });
     }, 180);
     return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [filters, listingRefresh]);
-
+  }, [user, filters, listingRefresh]);
   useEffect(() => {
     fetch(`${apiBase}/api/auth/me`, { credentials: "include" })
       .then((response) => response.ok ? response.json() : null)
@@ -68,18 +74,22 @@ function App() {
       <Navbar user={user} onChoose={(type) => { update({ type }); document.getElementById("browse")?.scrollIntoView({ behavior: "smooth" }); }} onAction={(action) => action === "logout" ? fetch(`${apiBase}/api/auth/logout`, { method: "POST", credentials: "include" }).then(() => setUser(null)) : action === "admin" ? setAdminOpen(true) : action === "sell" && user ? setListingOpen(true) : setAuthMode(action === "sell" ? "signup" : action)} />
       <main>
         <Hero user={user} onChoose={(type) => { update({ type }); document.getElementById("browse")?.scrollIntoView({ behavior: "smooth" }); }} />
-        <SearchBar filters={filters} onChange={update} user={user} />
-        <section className="cars-section" id="browse">
-          <div className="section-header">
-            <div><p className="eyebrow">CURATED FOR YOU</p><h2>{filters.type === "sale" ? "Cars for sale" : "Cars for rent"}</h2><p>Find the right car, from trusted listings across Ghana.</p></div>
-            <label className="sort-control">Sort by <select value={filters.sort} onChange={(event) => update({ sort: event.target.value })}><option value="recommended">Recommended</option><option value="price-low">Price: low to high</option><option value="price-high">Price: high to low</option></select></label>
-          </div>
-          <div className="results-meta">{results.length} {results.length === 1 ? "vehicle" : "vehicles"} available {!apiAvailable && <span> · Demo listings</span>}</div>
-          {results.length ? <div className="cars-grid">{results.map((car) => <CarCard key={car.id} car={car} onView={() => setSelectedCar(car)} />)}</div> : <div className="empty-state"><span>⌕</span><h3>No cars match those filters</h3><p>Try another location, keyword, or price range.</p><button className="button button-outline" onClick={() => update({ search: "", location: "", maxPrice: "" })}>Clear filters</button></div>}
-        </section>
-        <section className="trust-strip"><div><strong>Local listings</strong><span>Cars across Ghana</span></div><div><strong>Clear details</strong><span>Know what you’re viewing</span></div><div><strong>Built around you</strong><span>Buy or rent with ease</span></div></section>
+        {user && (
+          <>
+            <SearchBar filters={filters} onChange={update} user={user} />
+            <section className="cars-section" id="browse">
+              <div className="section-header">
+                <div><p className="eyebrow">CURATED FOR YOU</p><h2>{filters.type === "sale" ? "Cars for sale" : "Cars for rent"}</h2><p>Find the right car, from trusted listings across Ghana.</p></div>
+                <label className="sort-control">Sort by <select value={filters.sort} onChange={(event) => update({ sort: event.target.value })}><option value="recommended">Recommended</option><option value="price-low">Price: low to high</option><option value="price-high">Price: high to low</option></select></label>
+              </div>
+              <div className="results-meta">{results.length} {results.length === 1 ? "vehicle" : "vehicles"} available {!apiAvailable && <span> · Demo listings</span>}</div>
+              {results.length ? <div className="cars-grid">{results.map((car) => <CarCard key={car.id} car={car} onView={() => setSelectedCar(car)} />)}</div> : <div className="empty-state"><span>⌕</span><h3>No cars match those filters</h3><p>Try another location, keyword, or price range.</p><button className="button button-outline" onClick={() => update({ search: "", location: "", maxPrice: "" })}>Clear filters</button></div>}
+            </section>
+            <section className="trust-strip"><div><strong>Local listings</strong><span>Cars across Ghana</span></div><div><strong>Clear details</strong><span>Know what you’re viewing</span></div><div><strong>Built around you</strong><span>Buy or rent with ease</span></div></section>
+          </>
+        )}
       </main>
-      <footer className="site-footer"><a className="brand" href="#top"><span className="brand-mark">A</span> AutoHub</a><span>Find your next drive.</span><span>© {new Date().getFullYear()} AutoHub Ghana</span></footer>
+      {user && <footer className="site-footer"><a className="brand" href="#top"><span className="brand-mark">A</span> AutoHub</a><span>Find your next drive.</span><span>© {new Date().getFullYear()} AutoHub Ghana</span></footer>}
       {notice && <div className="toast" role="status">{notice}<button onClick={() => setNotice("")} aria-label="Dismiss">×</button></div>}
       {authMode && <AuthModal mode={authMode} onClose={() => setAuthMode(null)} onSuccess={(nextUser) => { setUser(nextUser); setAuthMode(null); }} />}
       {adminOpen && user?.role === "admin" && <AdminDashboard onClose={() => setAdminOpen(false)} />}
