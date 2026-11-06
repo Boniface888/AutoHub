@@ -20,51 +20,43 @@ function Navbar({ user, onChoose = () => {}, onAction = () => {} }) {
         <span>AutoHub</span>
       </a>
 
-      <nav
-        className={`nav-links${isMenuOpen ? " is-open" : ""}`}
-        id="primary-navigation"
-        aria-label="Main navigation"
-      >
-        <a href="#browse" onClick={() => handleChoose("sale")}>Buy</a>
-        <a href="#browse" onClick={() => handleChoose("rent")}>Rent</a>
-        <a href="#browse" onClick={() => handleAction(user ? "sell" : "signup")}>
-          Sell your car
-        </a>
-      </nav>
+      {user && (
+        <nav
+          className={`nav-links${isMenuOpen ? " is-open" : ""}`}
+          id="primary-navigation"
+          aria-label="Main navigation"
+        >
+          <a href="#browse" onClick={() => handleChoose("sale")}>Buy</a>
+          <a href="#browse" onClick={() => handleChoose("rent")}>Rent</a>
+          <a href="#browse" onClick={() => handleAction("sell")}>Sell your car</a>
+        </nav>
+      )}
 
       <div className="nav-actions">
         {user ? (
           <>
             {user.role === "admin" && (
-              <button className="login-button" onClick={() => handleAction("admin")}>
-                Admin
-              </button>
+              <button className="login-button" onClick={() => handleAction("admin")}>Admin</button>
             )}
             <span className="account-email">{user.email}</span>
-            <button className="login-button" onClick={() => handleAction("logout")}>
-              Log out
+            <button className="login-button" onClick={() => handleAction("logout")}>Log out</button>
+            <button
+              className="menu-toggle"
+              type="button"
+              aria-label={isMenuOpen ? "Close navigation menu" : "Open navigation menu"}
+              aria-controls="primary-navigation"
+              aria-expanded={isMenuOpen}
+              onClick={() => setIsMenuOpen((open) => !open)}
+            >
+              <span aria-hidden="true">{isMenuOpen ? "×" : "☰"}</span>
             </button>
           </>
         ) : (
           <>
-            <button className="login-button" onClick={() => handleAction("login")}>
-              Log in
-            </button>
-            <button className="button button-primary nav-signup" onClick={() => handleAction("signup")}>
-              Sign up
-            </button>
+            <button className="login-button" onClick={() => handleAction("login")}>Log in</button>
+            <button className="button button-primary nav-signup" onClick={() => handleAction("signup")}>Sign up</button>
           </>
         )}
-        <button
-          className="menu-toggle"
-          type="button"
-          aria-label={isMenuOpen ? "Close navigation menu" : "Open navigation menu"}
-          aria-controls="primary-navigation"
-          aria-expanded={isMenuOpen}
-          onClick={() => setIsMenuOpen((open) => !open)}
-        >
-          <span aria-hidden="true">{isMenuOpen ? "×" : "☰"}</span>
-        </button>
       </div>
     </header>
   );
