@@ -178,3 +178,44 @@
 .site-footer-guest { min-height: 76px; padding-top: 15px; padding-bottom: 15px; background: #f6f5f1; }
 .site-footer-guest > span:nth-child(2) { color: #536958; font-size: 11px; letter-spacing: .15px; }
 @media (max-width: 560px) { .site-footer-guest { justify-content: center; gap: 8px 16px; padding: 14px 20px; text-align: center; } .site-footer-guest > span:nth-child(2) { order: 1; flex-basis: 100%; } }
+
+/* Signed-in browsing layout for smaller screens */
+@media (max-width: 700px) and (min-width: 561px) {
+  .navbar { padding-inline: 18px; }
+  .nav-links { gap: 16px; }
+  .nav-actions { gap: 12px; }
+  .account-email { display: none; }
+  .hero-count { right: 24px; }
+}
+@media (max-width: 560px) {
+  .navbar { padding-inline: 16px; }
+  .hero:not(.hero-guest) { min-height: 520px; padding: 40px 22px 68px; }
+  .hero:not(.hero-guest) h1 { font-size: clamp(43px, 12vw, 51px); }
+  .hero-footnote { margin-top: 30px; }
+  .hero-count { display: none; }
+  .search-section { padding-inline: 10px; }
+  .search-tabs { justify-content: space-around; gap: 10px; }
+  .search-tabs button { flex: 1; text-align: center; }
+  .cars-section { padding: 42px 14px 54px; }
+  .section-header { gap: 14px; }
+  .section-header > div:first-child { width: 100%; }
+  .section-header h2 { font-size: clamp(27px, 8vw, 30px); }
+  .sort-control { align-self: stretch; justify-content: space-between; }
+  .sort-control select { min-width: 0; max-width: 70%; }
+  .results-meta { margin-bottom: 12px; }
+  .cars-grid { gap: 12px; }
+  .car-image { height: clamp(190px, 62vw, 225px); }
+  .car-info { padding: 14px 13px 12px; }
+  .car-details { flex-wrap: wrap; row-gap: 5px; }
+  .car-bottom { align-items: flex-start; gap: 8px; }
+  .car-bottom strong { font-size: clamp(15px, 4.6vw, 18px); }
+  .view-button { white-space: nowrap; }
+  .trust-strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; padding: 22px 14px; }
+  .trust-strip div { min-width: 0; }
+  .trust-strip strong { font-size: clamp(10px, 3vw, 12px); }
+  .trust-strip span { max-width: none; font-size: 9px; }
+  .site-footer { justify-content: space-between; gap: 10px; padding-inline: 16px; }
+  .site-footer > span:last-child { max-width: 48%; text-align: right; line-height: 1.5; }
+  .detail-modal { width: min(100%, 430px); }
+  .modal-content { padding: 20px 18px; }
+}
