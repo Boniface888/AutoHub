@@ -31,6 +31,8 @@ CREATE TABLE IF NOT EXISTS listings (
   type TEXT NOT NULL CHECK (type IN ('sale','rent')),
   image_url TEXT,
   images JSONB NOT NULL DEFAULT '[]'::jsonb,
+  contact_email TEXT,
+  contact_phone TEXT,
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','active','rejected','removed','sold')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -45,6 +47,7 @@ CREATE TABLE IF NOT EXISTS bookings (
   renter_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
   starts_at TIMESTAMPTZ NOT NULL,
   ends_at TIMESTAMPTZ NOT NULL,
+  renter_phone TEXT,
   status TEXT NOT NULL DEFAULT 'requested' CHECK (status IN ('requested','confirmed','cancelled','completed')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   CHECK (ends_at > starts_at)
@@ -53,3 +56,19 @@ CREATE TABLE IF NOT EXISTS bookings (
 CREATE INDEX IF NOT EXISTS bookings_availability_idx ON bookings (listing_id,starts_at,ends_at) WHERE status IN ('requested','confirmed');
 
 ALTER TABLE listings ADD COLUMN IF NOT EXISTS images JSONB NOT NULL DEFAULT '[]'::jsonb;
+
+
+CREATE TABLE IF NOT EXISTS listing_inquiries (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  listing_id UUID NOT NULL REFERENCES listings(id) ON DELETE CASCADE,
+  buyer_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  buyer_phone TEXT NOT NULL,
+  message TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS listing_inquiries_owner_idx ON listing_inquiries (listing_id,created_at DESC);
+ALTER TABLE listings ADD COLUMN IF NOT EXISTS contact_email TEXT;
+ALTER TABLE listings ADD COLUMN IF NOT EXISTS contact_phone TEXT;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS renter_phone TEXT;
+UPDATE listings AS listing SET contact_email = users.email FROM users WHERE listing.owner_id = users.id AND listing.contact_email IS NULL;

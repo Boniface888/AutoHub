@@ -1,15 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import { apiBase } from "../services/listings";
 
-const initial = { title: "", description: "", make: "", model: "", year: new Date().getFullYear(), location: "", transmission: "Automatic", fuel: "Petrol", body: "Sedan", price: "", type: "sale" };
+const initial = { title: "", description: "", make: "", model: "", year: new Date().getFullYear(), location: "", transmission: "Automatic", fuel: "Petrol", body: "Sedan", price: "", type: "sale", contactEmail: "", contactPhone: "" };
 const maxPhotos = 10;
 const maxPhotoBytes = 8 * 1024 * 1024;
 const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
 const requiredViews = ["front", "rear", "interior"];
 const viewLabels = { front: "Front view", rear: "Rear view", interior: "Interior", other: "Other view" };
 
-function ListingForm({ onClose, onSuccess, initialType = "sale" }) {
-  const [form, setForm] = useState(() => ({ ...initial, type: initialType }));
+function ListingForm({ onClose, onSuccess, initialType = "sale", user }) {
+  const [form, setForm] = useState(() => ({ ...initial, type: initialType, contactEmail: user?.email || "" }));
   const [photos, setPhotos] = useState([]);
   const photosRef = useRef(photos);
   const [error, setError] = useState("");
@@ -194,6 +194,9 @@ function ListingForm({ onClose, onSuccess, initialType = "sale" }) {
             )}
           </div>
           <label className="wide">Description<textarea name="description" rows="3" maxLength="4000" placeholder="Tell buyers or renters about the car’s condition, features, and anything else they should know." value={form.description} onChange={update} /></label>
+          <div className="listing-contact-heading wide"><strong>Your contact details</strong><span>Interested buyers or renters can reach you. We’ll email you when someone contacts you.</span></div>
+          <label>Contact email<input name="contactEmail" type="email" required maxLength="254" autoComplete="email" value={form.contactEmail} onChange={update} /></label>
+          <label>Contact phone<input name="contactPhone" type="tel" required minLength="7" maxLength="20" autoComplete="tel" placeholder="+233 20 123 4567" value={form.contactPhone} onChange={update} /></label>
           {uploadMessage && <p className="listing-upload-status wide" role="status">{uploadMessage}</p>}
           {error && <p className="listing-error wide" role="alert">{error}</p>}
           <div className="listing-submit wide">

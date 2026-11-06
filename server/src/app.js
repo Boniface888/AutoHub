@@ -8,7 +8,7 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { fileURLToPath } from "node:url";
 import { pool, query } from "./db.js";
-import { bookingSchema, credentialsSchema, emailSchema, listingSchema, resetPasswordSchema } from "./validation.js";
+import { bookingSchema, credentialsSchema, emailSchema, inquirySchema, listingSchema, resetPasswordSchema } from "./validation.js";
 import { clearSession, issueSession, requireAdmin, requireAuth } from "./security.js";
 
 export const app = express();
@@ -19,6 +19,21 @@ const originAllowed = (origin, req) => isProduction ? origin === `${req.protocol
 const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 10, standardHeaders: "draft-8", legacyHeaders: false, message: { error: "Too many attempts. Try again shortly." } });
 const apiLimiter = rateLimit({ windowMs: 60 * 1000, limit: 120, standardHeaders: "draft-8", legacyHeaders: false });
 const imageSignatureLimiter = rateLimit({ windowMs: 60 * 1000, limit: 30, standardHeaders: "draft-8", legacyHeaders: false });
+const inquiryLimiter = rateLimit({ windowMs: 60 * 1000, limit: 10, standardHeaders: "draft-8", legacyHeaders: false });
+
+async function sendOwnerEmail({ to, subject, text }) {
+  const { RESEND_API_KEY: apiKey, EMAIL_FROM: emailFrom } = process.env;
+  if (!apiKey || !emailFrom || !to) return false;
+  try {
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      signal: AbortSignal.timeout(10_000),
+      body: JSON.stringify({ from: emailFrom, to: [to], subject, text }),
+    });
+    return response.ok;
+  } catch { return false; }
+}
 
 app.disable("x-powered-by");
 app.set("trust proxy", 1);
@@ -193,8 +208,30 @@ app.post("/api/listings", requireAuth, async (req, res, next) => {
     const viewOrder = { front: 0, rear: 1, interior: 2, other: 3 };
     const listingImages = [...listing.images].sort((left, right) => viewOrder[left.view] - viewOrder[right.view]);
     const imageUrl = listingImages[0].url;
-    const result = await query("INSERT INTO listings (owner_id,title,description,make,model,year,location,transmission,fuel,body,price,type,image_url,images,status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb,'active') RETURNING *", [req.auth.sub, listing.title, listing.description, listing.make, listing.model, listing.year, listing.location, listing.transmission, listing.fuel, listing.body, listing.price, listing.type, imageUrl, JSON.stringify(listingImages)]);
+    const result = await query("INSERT INTO listings (owner_id,title,description,make,model,year,location,transmission,fuel,body,price,type,image_url,images,contact_email,contact_phone,status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb,$15,$16,'active') RETURNING *", [req.auth.sub, listing.title, listing.description, listing.make, listing.model, listing.year, listing.location, listing.transmission, listing.fuel, listing.body, listing.price, listing.type, imageUrl, JSON.stringify(listingImages), listing.contactEmail, listing.contactPhone]);
     res.status(201).json({ listing: result.rows[0] });
+  } catch (error) { next(error); }
+});
+
+app.post("/api/listings/:id/inquiries", requireAuth, inquiryLimiter, async (req, res, next) => {
+  try {
+    const inquiry = inquirySchema.parse(req.body);
+    const listing = await query(
+      "SELECT l.id,l.title,l.owner_id,COALESCE(l.contact_email,owner.email) AS contact_email,l.contact_phone,buyer.email AS buyer_email FROM listings l JOIN users owner ON owner.id=l.owner_id JOIN users buyer ON buyer.id=$2 WHERE l.id=$1 AND l.type='sale' AND l.status='active'",
+      [req.params.id, req.auth.sub],
+    );
+    const car = listing.rows[0];
+    if (!car || car.owner_id === req.auth.sub) return res.status(404).json({ error: "Car listing was not found." });
+    const saved = await query(
+      "INSERT INTO listing_inquiries (listing_id,buyer_id,buyer_phone,message) VALUES ($1,$2,$3,$4) RETURNING id,created_at",
+      [car.id, req.auth.sub, inquiry.phone, inquiry.message],
+    );
+    const notificationSent = await sendOwnerEmail({
+      to: car.contact_email,
+      subject: `New interest in ${car.title.replace(/[\r\n]+/g, " ").slice(0, 100)}`,
+      text: `Someone is interested in your car listing: ${car.title}\n\nBuyer email: ${car.buyer_email}\nBuyer phone: ${inquiry.phone}\nMessage: ${inquiry.message || "No message included."}\n\nSign in to AutoHub to view your listing.`,
+    });
+    res.status(201).json({ inquiry: saved.rows[0], notificationSent, sellerContact: { email: car.contact_email, phone: car.contact_phone } });
   } catch (error) { next(error); }
 });
 
@@ -206,13 +243,20 @@ app.post("/api/bookings", requireAuth, async (req, res, next) => {
     const end = new Date(booking.endsAt);
     if (start <= new Date() || end <= start) return res.status(400).json({ error: "Choose a future end date after the start date." });
     await client.query("BEGIN");
-    const listing = await client.query("SELECT id,owner_id FROM listings WHERE id=$1 AND type='rent' AND status='active' FOR UPDATE", [booking.listingId]);
+    const listing = await client.query("SELECT l.id,l.owner_id,l.title,COALESCE(l.contact_email,owner.email) AS contact_email,l.contact_phone FROM listings l JOIN users owner ON owner.id=l.owner_id WHERE l.id=$1 AND l.type='rent' AND l.status='active' FOR UPDATE OF l", [booking.listingId]);
     if (!listing.rows[0] || listing.rows[0].owner_id === req.auth.sub) { await client.query("ROLLBACK"); return res.status(404).json({ error: "Rental listing was not found." }); }
     const conflict = await client.query("SELECT 1 FROM bookings WHERE listing_id=$1 AND status IN ('requested','confirmed') AND starts_at < $3 AND ends_at > $2", [booking.listingId, start, end]);
     if (conflict.rowCount) { await client.query("ROLLBACK"); return res.status(409).json({ error: "Those dates are not available." }); }
-    const created = await client.query("INSERT INTO bookings (listing_id,renter_id,starts_at,ends_at) VALUES ($1,$2,$3,$4) RETURNING id,listing_id,starts_at,ends_at,status", [booking.listingId, req.auth.sub, start, end]);
+    const renter = await client.query("SELECT email FROM users WHERE id=$1", [req.auth.sub]);
+    const created = await client.query("INSERT INTO bookings (listing_id,renter_id,starts_at,ends_at,renter_phone) VALUES ($1,$2,$3,$4,$5) RETURNING id,listing_id,starts_at,ends_at,status,renter_phone", [booking.listingId, req.auth.sub, start, end, booking.phone]);
     await client.query("COMMIT");
-    res.status(201).json({ booking: created.rows[0] });
+    const car = listing.rows[0];
+    const notificationSent = await sendOwnerEmail({
+      to: car.contact_email,
+      subject: `New rental request for ${car.title.replace(/[\r\n]+/g, " ").slice(0, 100)}`,
+      text: `Someone requested to rent your car: ${car.title}\n\nRenter email: ${renter.rows[0]?.email || "Unavailable"}\nRenter phone: ${booking.phone}\nRequested from: ${start.toISOString()}\nRequested until: ${end.toISOString()}\n\nSign in to AutoHub to review the request.`,
+    });
+    res.status(201).json({ booking: created.rows[0], notificationSent, sellerContact: { email: car.contact_email, phone: car.contact_phone } });
   } catch (error) { await client.query("ROLLBACK"); next(error); } finally { client.release(); }
 });
 

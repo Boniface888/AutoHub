@@ -30,6 +30,8 @@ export const listingSchema = z.object({
   body: z.string().trim().min(2).max(40),
   price: z.number().positive().max(100_000_000),
   type: z.enum(["sale", "rent"]),
+  contactEmail: z.string().trim().email().max(254).transform((value) => value.toLowerCase()),
+  contactPhone: z.string().trim().regex(/^\+?[0-9][0-9\s().-]{6,19}$/),
   images: z.array(listingImageSchema).min(3).max(10),
   imageUrl: z.string().url().max(2048).refine((value) => value.startsWith("https://"), "Use a secure HTTPS photo URL.").optional(),
 }).superRefine((listing, context) => {
@@ -44,4 +46,10 @@ export const bookingSchema = z.object({
   listingId: z.string().uuid(),
   startsAt: z.string().datetime(),
   endsAt: z.string().datetime(),
+  phone: z.string().trim().regex(/^\+?[0-9][0-9\s().-]{6,19}$/),
+});
+
+export const inquirySchema = z.object({
+  phone: z.string().trim().regex(/^\+?[0-9][0-9\s().-]{6,19}$/),
+  message: z.string().trim().max(1000).default(""),
 });

@@ -107,7 +107,9 @@
 .auth-modal form,.auth-modal label { display: flex; flex-direction: column; }
 .auth-modal form { gap: 15px; }
 .auth-modal label { gap: 7px; color: #555f56; font-size: 10px; font-weight: 700; }
-.auth-modal input { height: 42px; padding: 0 11px; color: #29372e; border: 1px solid #dedfd7; border-radius: 3px; background: white; font-size: 12px; }
+.auth-modal input,.auth-modal textarea { width: 100%; padding: 10px 11px; color: #29372e; border: 1px solid #dedfd7; border-radius: 3px; background: white; font-family: var(--body); font-size: 12px; }
+.auth-modal input { height: 42px; }
+.auth-modal textarea { min-height: 82px; resize: vertical; }
 .auth-modal label small { min-height: 0; color: #898d84; font-size: 9px; font-weight: 400; }
 .auth-submit { width: 100%; margin-top: 3px; }
 .auth-text-link { align-self: flex-end; padding: 0; color: #315c43; background: transparent; font-size: 11px; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
@@ -138,6 +140,11 @@
 .listing-form input,.listing-form select { height: 39px; }
 .listing-form textarea { resize: vertical; }
 .listing-form .wide { grid-column: 1 / -1; }
+.listing-contact-heading { display: flex; flex-direction: column; gap: 5px; margin-top: 8px; padding-top: 14px; border-top: 1px solid #e8e8e0; }
+.listing-contact-heading strong { color: #344638; font-family: var(--display); font-size: 17px; font-weight: 500; }
+.listing-contact-heading span { color: #7f847b; font-size: 10px; line-height: 1.5; }
+.owner-contact-links { display: flex; flex-direction: column; gap: 9px; margin: 8px 0 16px; }
+.owner-contact-links a { color: #315c43; font-size: 13px; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; overflow-wrap: anywhere; }
 .listing-error { margin: 0; color: #a53f35; font-size: 11px; line-height: 1.5; }
 .listing-submit { display: flex; justify-content: flex-end; gap: 9px; padding-top: 4px; }
 @media (max-width: 560px) { .listing-modal { padding: 25px 19px; } .listing-form { grid-template-columns: 1fr; } .listing-form .wide { grid-column: auto; } .admin-modal { padding: 27px 18px; } .admin-row { align-items: flex-start; flex-direction: column; } }
