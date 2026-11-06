@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 import Navbar from "./components/Navbar";
 import Hero from "./components/Hero";
@@ -13,6 +13,7 @@ import ListingForm from "./components/ListingForm";
 import SellerSection from "./components/SellerSection";
 import BookingModal from "./components/BookingModal";
 import InquiryModal from "./components/InquiryModal";
+import RequestInbox from "./components/RequestInbox";
 
 const cars = [
   { id: 1, name: "Toyota Camry", year: 2022, location: "Accra", transmission: "Automatic", fuel: "Petrol", price: 185000, status: "sale", image: "https://images.unsplash.com/photo-1621007947382-bb3c3994e3fb?auto=format&fit=crop&w=900&q=85", mileage: "28,000 km", body: "Sedan" },
@@ -36,6 +37,11 @@ function App() {
   const [listingType, setListingType] = useState("sale");
   const [bookingCar, setBookingCar] = useState(null);
   const [inquiryCar, setInquiryCar] = useState(null);
+  const [requestInboxOpen, setRequestInboxOpen] = useState(false);
+  const [hasListings, setHasListings] = useState(false);
+  const [requestCount, setRequestCount] = useState(0);
+  const knownUnreadRequests = useRef(new Set());
+  const hasRequestBaseline = useRef(false);
   const [listingRefresh, setListingRefresh] = useState(0);
   const [user, setUser] = useState(null);
 
@@ -62,6 +68,38 @@ function App() {
       .catch(() => {});
   }, []);
 
+  useEffect(() => {
+    if (!user) {
+      knownUnreadRequests.current = new Set();
+      hasRequestBaseline.current = false;
+      return undefined;
+    }
+
+    let active = true;
+    async function refreshRequests() {
+      try {
+        const response = await fetch(`${apiBase}/api/owner/requests`, { credentials: "include" });
+        if (!response.ok) return;
+        const data = await response.json();
+        if (!active) return;
+        const unreadRequests = data.requests.filter((request) => !request.readAt);
+        const currentUnread = new Set(unreadRequests.map((request) => `${request.type}:${request.id}`));
+        if (hasRequestBaseline.current) {
+          const newest = unreadRequests.find((request) => !knownUnreadRequests.current.has(`${request.type}:${request.id}`));
+          if (newest) setNotice(`New request for ${newest.listingTitle}. Open Requests to see their details.`);
+        }
+        knownUnreadRequests.current = currentUnread;
+        hasRequestBaseline.current = true;
+        setRequestCount(data.unreadCount);
+        setHasListings(data.hasListings);
+      } catch { /* Keep the current unread count when the connection is unavailable. */ }
+    }
+
+    refreshRequests();
+    const timer = window.setInterval(refreshRequests, 30_000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [user]);
+
   const results = useMemo(() => {
     if (apiListings !== null) return apiListings;
     const query = filters.search.trim().toLowerCase();
@@ -74,10 +112,11 @@ function App() {
   }, [filters, apiListings]);
 
   const update = (patch) => setFilters((current) => ({ ...current, ...patch }));
+  const handleRequestsRead = useCallback((remainingCount) => setRequestCount(remainingCount), []);
 
   return (
     <>
-      <Navbar user={user} onChoose={(type) => { update({ type }); document.getElementById("browse")?.scrollIntoView({ behavior: "smooth" }); }} onAction={(action) => action === "logout" ? fetch(`${apiBase}/api/auth/logout`, { method: "POST", credentials: "include" }).then(() => setUser(null)) : action === "admin" ? setAdminOpen(true) : action === "list-section" ? document.getElementById("list-your-car")?.scrollIntoView({ behavior: "smooth" }) : action === "sell" && user ? (setListingType("sale"), setListingOpen(true)) : setAuthMode(action === "sell" ? "signup" : action)} />
+      <Navbar user={user} hasListings={hasListings} requestCount={requestCount} onChoose={(type) => { update({ type }); document.getElementById("browse")?.scrollIntoView({ behavior: "smooth" }); }} onAction={(action) => action === "logout" ? fetch(`${apiBase}/api/auth/logout`, { method: "POST", credentials: "include" }).then(() => { setUser(null); setRequestCount(0); setHasListings(false); }) : action === "admin" ? setAdminOpen(true) : action === "requests" ? setRequestInboxOpen(true) : action === "list-section" ? document.getElementById("list-your-car")?.scrollIntoView({ behavior: "smooth" }) : action === "sell" && user ? (setListingType("sale"), setListingOpen(true)) : setAuthMode(action === "sell" ? "signup" : action)} />
       <main>
         <Hero user={user} onChoose={(type) => { update({ type }); document.getElementById("browse")?.scrollIntoView({ behavior: "smooth" }); }} />
         {user && (
@@ -100,10 +139,11 @@ function App() {
       {notice && <div className="toast" role="status">{notice}<button onClick={() => setNotice("")} aria-label="Dismiss">×</button></div>}
       {authMode && <AuthModal mode={authMode} resetToken={resetToken} onClose={() => setAuthMode(null)} onSuccess={(nextUser) => { setUser(nextUser); setAuthMode(null); }} />}
       {adminOpen && user?.role === "admin" && <AdminDashboard onClose={() => setAdminOpen(false)} />}
-      {listingOpen && <ListingForm initialType={listingType} user={user} onClose={() => setListingOpen(false)} onSuccess={() => { setListingOpen(false); update({ type: listingType, search: "", location: "", maxPrice: "" }); setListingRefresh((tick) => tick + 1); setNotice("Your car listing is now live."); }} />}
+      {listingOpen && <ListingForm initialType={listingType} user={user} onClose={() => setListingOpen(false)} onSuccess={() => { setListingOpen(false); setHasListings(true); update({ type: listingType, search: "", location: "", maxPrice: "" }); setListingRefresh((tick) => tick + 1); setNotice("Your car listing is now live."); }} />}
       {selectedCar && <div className="modal-backdrop" role="presentation" onClick={() => setSelectedCar(null)}><section className="detail-modal" role="dialog" aria-modal="true" aria-labelledby="detail-title" onClick={(event) => event.stopPropagation()}><button className="modal-close" onClick={() => setSelectedCar(null)} aria-label="Close">×</button><CarGallery images={selectedCar.images || []} fallbackImage={selectedCar.image} alt={selectedCar.name} /><div className="modal-content"><p className="eyebrow">{selectedCar.status === "sale" ? "FOR SALE" : "AVAILABLE TO RENT"} · {selectedCar.location.toUpperCase()}</p><h2 id="detail-title">{selectedCar.name}</h2><div className="detail-specs"><span>{selectedCar.year}</span><span>{selectedCar.transmission}</span><span>{selectedCar.fuel}</span><span>{selectedCar.mileage}</span></div><strong className="modal-price">GH₵ {selectedCar.price.toLocaleString()}{selectedCar.rate ? <small> / day</small> : ""}</strong><p>{selectedCar.description || (user ? (selectedCar.status === "rent" ? "Choose your dates and send a rental request to the owner." : "Contact the listing owner to learn more and arrange a viewing.") : "Sign in or create an account to contact sellers and request rentals.")}</p><button className="button button-primary" onClick={() => { const car = selectedCar; setSelectedCar(null); if (!user) setAuthMode("login"); else if (car.status === "rent") { if (typeof car.id === "string") setBookingCar(car); else setNotice("Rental requests are available for active database listings."); } else if (typeof car.id === "string") setInquiryCar(car); else setNotice("Contact the seller after choosing a listed vehicle."); }}>{user ? (selectedCar.status === "rent" ? "Request rental" : "Contact seller") : "Sign in to continue"}</button></div></section></div>}
       {bookingCar && <BookingModal car={bookingCar} onClose={() => setBookingCar(null)} />}
       {inquiryCar && <InquiryModal car={inquiryCar} onClose={() => setInquiryCar(null)} />}
+      {requestInboxOpen && <RequestInbox onClose={() => setRequestInboxOpen(false)} onRead={handleRequestsRead} />}
     </>
   );
 }

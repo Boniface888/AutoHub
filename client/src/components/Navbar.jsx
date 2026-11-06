@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-function Navbar({ user, onChoose = () => {}, onAction = () => {} }) {
+function Navbar({ user, hasListings = false, requestCount = 0, onChoose = () => {}, onAction = () => {} }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const handleChoose = (type) => {
@@ -29,6 +29,7 @@ function Navbar({ user, onChoose = () => {}, onAction = () => {} }) {
           <a href="#browse" onClick={() => handleChoose("sale")}>Buy</a>
           <a href="#browse" onClick={() => handleChoose("rent")}>Rent</a>
           <a href="#list-your-car" onClick={() => handleAction("list-section")}>Sell your car</a>
+          {hasListings && <button className="nav-request-link" type="button" onClick={() => handleAction("requests")}>Requests{requestCount > 0 && <span className="nav-request-count" aria-label={`${requestCount} unread requests`}>{requestCount > 99 ? "99+" : requestCount}</span>}</button>}
         </nav>
       )}
 

@@ -64,6 +64,7 @@ CREATE TABLE IF NOT EXISTS listing_inquiries (
   buyer_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
   buyer_phone TEXT NOT NULL,
   message TEXT NOT NULL DEFAULT '',
+  owner_viewed_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -71,4 +72,6 @@ CREATE INDEX IF NOT EXISTS listing_inquiries_owner_idx ON listing_inquiries (lis
 ALTER TABLE listings ADD COLUMN IF NOT EXISTS contact_email TEXT;
 ALTER TABLE listings ADD COLUMN IF NOT EXISTS contact_phone TEXT;
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS renter_phone TEXT;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS owner_viewed_at TIMESTAMPTZ;
+ALTER TABLE listing_inquiries ADD COLUMN IF NOT EXISTS owner_viewed_at TIMESTAMPTZ;
 UPDATE listings AS listing SET contact_email = users.email FROM users WHERE listing.owner_id = users.id AND listing.contact_email IS NULL;

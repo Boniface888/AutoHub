@@ -216,9 +216,10 @@ app.post("/api/listings", requireAuth, async (req, res, next) => {
 app.post("/api/listings/:id/inquiries", requireAuth, inquiryLimiter, async (req, res, next) => {
   try {
     const inquiry = inquirySchema.parse(req.body);
+    const listingId = z.string().uuid().parse(req.params.id);
     const listing = await query(
       "SELECT l.id,l.title,l.owner_id,COALESCE(l.contact_email,owner.email) AS contact_email,l.contact_phone,buyer.email AS buyer_email FROM listings l JOIN users owner ON owner.id=l.owner_id JOIN users buyer ON buyer.id=$2 WHERE l.id=$1 AND l.type='sale' AND l.status='active'",
-      [req.params.id, req.auth.sub],
+      [listingId, req.auth.sub],
     );
     const car = listing.rows[0];
     if (!car || car.owner_id === req.auth.sub) return res.status(404).json({ error: "Car listing was not found." });
@@ -232,6 +233,46 @@ app.post("/api/listings/:id/inquiries", requireAuth, inquiryLimiter, async (req,
       text: `Someone is interested in your car listing: ${car.title}\n\nBuyer email: ${car.buyer_email}\nBuyer phone: ${inquiry.phone}\nMessage: ${inquiry.message || "No message included."}\n\nSign in to AutoHub to view your listing.`,
     });
     res.status(201).json({ inquiry: saved.rows[0], notificationSent, sellerContact: { email: car.contact_email, phone: car.contact_phone } });
+  } catch (error) { next(error); }
+});
+
+app.get("/api/owner/requests", requireAuth, async (req, res, next) => {
+  try {
+    const [requests, unread] = await Promise.all([
+      query(
+        `SELECT i.id,'sale'::text AS type,l.id AS "listingId",l.title AS "listingTitle",buyer.email AS "requesterEmail",i.buyer_phone AS "requesterPhone",i.message,NULL::timestamptz AS "startsAt",NULL::timestamptz AS "endsAt",i.created_at AS "createdAt",i.owner_viewed_at AS "readAt"
+         FROM listing_inquiries i JOIN listings l ON l.id=i.listing_id JOIN users buyer ON buyer.id=i.buyer_id
+         WHERE l.owner_id=$1
+         UNION ALL
+         SELECT b.id,'rent'::text,l.id AS "listingId",l.title AS "listingTitle",renter.email AS "requesterEmail",b.renter_phone AS "requesterPhone",NULL::text AS message,b.starts_at AS "startsAt",b.ends_at AS "endsAt",b.created_at AS "createdAt",b.owner_viewed_at AS "readAt"
+         FROM bookings b JOIN listings l ON l.id=b.listing_id JOIN users renter ON renter.id=b.renter_id
+         WHERE l.owner_id=$1
+         ORDER BY "createdAt" DESC LIMIT 50`,
+        [req.auth.sub],
+      ),
+      query(
+        `SELECT EXISTS(SELECT 1 FROM listings WHERE owner_id=$1) AS "hasListings",
+                ((SELECT COUNT(*) FROM listing_inquiries i JOIN listings l ON l.id=i.listing_id WHERE l.owner_id=$1 AND i.owner_viewed_at IS NULL) +
+                 (SELECT COUNT(*) FROM bookings b JOIN listings l ON l.id=b.listing_id WHERE l.owner_id=$1 AND b.owner_viewed_at IS NULL))::int AS "unreadCount"`,
+        [req.auth.sub],
+      ),
+    ]);
+    res.json({ requests: requests.rows, unreadCount: unread.rows[0].unreadCount, hasListings: unread.rows[0].hasListings });
+  } catch (error) { next(error); }
+});
+
+app.post("/api/owner/requests/read", requireAuth, async (req, res, next) => {
+  try {
+    const { sales, rentals } = z.object({ sales: z.array(z.string().uuid()).max(50), rentals: z.array(z.string().uuid()).max(50) }).parse(req.body);
+    if (sales.length) await query(
+      "UPDATE listing_inquiries i SET owner_viewed_at=NOW() FROM listings l WHERE l.id=i.listing_id AND l.owner_id=$1 AND i.id=ANY($2::uuid[]) AND i.owner_viewed_at IS NULL",
+      [req.auth.sub, sales],
+    );
+    if (rentals.length) await query(
+      "UPDATE bookings b SET owner_viewed_at=NOW() FROM listings l WHERE l.id=b.listing_id AND l.owner_id=$1 AND b.id=ANY($2::uuid[]) AND b.owner_viewed_at IS NULL",
+      [req.auth.sub, rentals],
+    );
+    res.status(204).end();
   } catch (error) { next(error); }
 });
 
