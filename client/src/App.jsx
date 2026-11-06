@@ -9,6 +9,7 @@ import AuthModal from "./components/AuthModal";
 import { apiBase } from "./services/listings";
 import AdminDashboard from "./components/AdminDashboard";
 import ListingForm from "./components/ListingForm";
+import SellerSection from "./components/SellerSection";
 import BookingModal from "./components/BookingModal";
 
 const cars = [
@@ -29,6 +30,7 @@ function App() {
   const [authMode, setAuthMode] = useState(null);
   const [adminOpen, setAdminOpen] = useState(false);
   const [listingOpen, setListingOpen] = useState(false);
+  const [listingType, setListingType] = useState("sale");
   const [bookingCar, setBookingCar] = useState(null);
   const [listingRefresh, setListingRefresh] = useState(0);
   const [user, setUser] = useState(null);
@@ -71,7 +73,7 @@ function App() {
 
   return (
     <>
-      <Navbar user={user} onChoose={(type) => { update({ type }); document.getElementById("browse")?.scrollIntoView({ behavior: "smooth" }); }} onAction={(action) => action === "logout" ? fetch(`${apiBase}/api/auth/logout`, { method: "POST", credentials: "include" }).then(() => setUser(null)) : action === "admin" ? setAdminOpen(true) : action === "sell" && user ? setListingOpen(true) : setAuthMode(action === "sell" ? "signup" : action)} />
+      <Navbar user={user} onChoose={(type) => { update({ type }); document.getElementById("browse")?.scrollIntoView({ behavior: "smooth" }); }} onAction={(action) => action === "logout" ? fetch(`${apiBase}/api/auth/logout`, { method: "POST", credentials: "include" }).then(() => setUser(null)) : action === "admin" ? setAdminOpen(true) : action === "list-section" ? document.getElementById("list-your-car")?.scrollIntoView({ behavior: "smooth" }) : action === "sell" && user ? (setListingType("sale"), setListingOpen(true)) : setAuthMode(action === "sell" ? "signup" : action)} />
       <main>
         <Hero user={user} onChoose={(type) => { update({ type }); document.getElementById("browse")?.scrollIntoView({ behavior: "smooth" }); }} />
         {user && (
@@ -85,6 +87,7 @@ function App() {
               <div className="results-meta">{results.length} {results.length === 1 ? "vehicle" : "vehicles"} available {!apiAvailable && <span> · Demo listings</span>}</div>
               {results.length ? <div className="cars-grid">{results.map((car) => <CarCard key={car.id} car={car} onView={() => setSelectedCar(car)} />)}</div> : <div className="empty-state"><span>⌕</span><h3>No cars match those filters</h3><p>Try another location, keyword, or price range.</p><button className="button button-outline" onClick={() => update({ search: "", location: "", maxPrice: "" })}>Clear filters</button></div>}
             </section>
+            <SellerSection onChoose={(type) => { setListingType(type); setListingOpen(true); }} />
             <section className="trust-strip"><div><strong>Local listings</strong><span>Cars across Ghana</span></div><div><strong>Clear details</strong><span>Know what you’re viewing</span></div><div><strong>Built around you</strong><span>Buy or rent with ease</span></div></section>
           </>
         )}
@@ -93,8 +96,8 @@ function App() {
       {notice && <div className="toast" role="status">{notice}<button onClick={() => setNotice("")} aria-label="Dismiss">×</button></div>}
       {authMode && <AuthModal mode={authMode} onClose={() => setAuthMode(null)} onSuccess={(nextUser) => { setUser(nextUser); setAuthMode(null); }} />}
       {adminOpen && user?.role === "admin" && <AdminDashboard onClose={() => setAdminOpen(false)} />}
-      {listingOpen && <ListingForm onClose={() => setListingOpen(false)} onSuccess={() => { setListingOpen(false); setListingRefresh((tick) => tick + 1); setNotice("Listing submitted for review."); }} />}
-      {selectedCar && <div className="modal-backdrop" role="presentation" onClick={() => setSelectedCar(null)}><section className="detail-modal" role="dialog" aria-modal="true" aria-labelledby="detail-title" onClick={(event) => event.stopPropagation()}><button className="modal-close" onClick={() => setSelectedCar(null)} aria-label="Close">×</button><img src={selectedCar.image} alt={selectedCar.name} /><div className="modal-content"><p className="eyebrow">{selectedCar.status === "sale" ? "FOR SALE" : "AVAILABLE TO RENT"} · {selectedCar.location.toUpperCase()}</p><h2 id="detail-title">{selectedCar.name}</h2><div className="detail-specs"><span>{selectedCar.year}</span><span>{selectedCar.transmission}</span><span>{selectedCar.fuel}</span><span>{selectedCar.mileage}</span></div><strong className="modal-price">GH₵ {selectedCar.price.toLocaleString()}{selectedCar.rate ? <small> / day</small> : ""}</strong><p>{user ? (selectedCar.status === "rent" ? "Choose your dates and send a rental request to the owner." : "Contact the listing owner to learn more and arrange a viewing.") : "Sign in or create an account to contact sellers and request rentals."}</p><button className="button button-primary" onClick={() => { const car = selectedCar; setSelectedCar(null); if (!user) setAuthMode("login"); else if (car.status === "rent") { if (typeof car.id === "string") setBookingCar(car); else setNotice("Rental requests are available for active database listings."); } else setNotice("Contact details will be available once a seller profile is set up."); }}>{user ? (selectedCar.status === "rent" ? "Request rental" : "Contact seller") : "Sign in to continue"}</button></div></section></div>}
+      {listingOpen && <ListingForm initialType={listingType} onClose={() => setListingOpen(false)} onSuccess={() => { setListingOpen(false); setListingRefresh((tick) => tick + 1); setNotice("Listing submitted for review."); }} />}
+      {selectedCar && <div className="modal-backdrop" role="presentation" onClick={() => setSelectedCar(null)}><section className="detail-modal" role="dialog" aria-modal="true" aria-labelledby="detail-title" onClick={(event) => event.stopPropagation()}><button className="modal-close" onClick={() => setSelectedCar(null)} aria-label="Close">×</button><img src={selectedCar.image} alt={selectedCar.name} /><div className="modal-content"><p className="eyebrow">{selectedCar.status === "sale" ? "FOR SALE" : "AVAILABLE TO RENT"} · {selectedCar.location.toUpperCase()}</p><h2 id="detail-title">{selectedCar.name}</h2><div className="detail-specs"><span>{selectedCar.year}</span><span>{selectedCar.transmission}</span><span>{selectedCar.fuel}</span><span>{selectedCar.mileage}</span></div><strong className="modal-price">GH₵ {selectedCar.price.toLocaleString()}{selectedCar.rate ? <small> / day</small> : ""}</strong><p>{selectedCar.description || (user ? (selectedCar.status === "rent" ? "Choose your dates and send a rental request to the owner." : "Contact the listing owner to learn more and arrange a viewing.") : "Sign in or create an account to contact sellers and request rentals.")}</p><button className="button button-primary" onClick={() => { const car = selectedCar; setSelectedCar(null); if (!user) setAuthMode("login"); else if (car.status === "rent") { if (typeof car.id === "string") setBookingCar(car); else setNotice("Rental requests are available for active database listings."); } else setNotice("Contact details will be available once a seller profile is set up."); }}>{user ? (selectedCar.status === "rent" ? "Request rental" : "Contact seller") : "Sign in to continue"}</button></div></section></div>}
       {bookingCar && <BookingModal car={bookingCar} onClose={() => setBookingCar(null)} onSuccess={() => { setBookingCar(null); setNotice("Rental request sent to the owner."); }} />}
     </>
   );

@@ -9,5 +9,5 @@ export async function getListings(filters, signal) {
   const response = await fetch(`${apiBase}/api/listings?${search}`, { signal, credentials: "include" });
   if (!response.ok) throw new Error("Could not load listings.");
   const data = await response.json();
-  return data.listings.map((listing) => ({ ...listing, status: listing.type, image: listing.imageUrl || "/src/assets/hero.png", mileage: "Contact for details" }));
+  return data.listings.map((listing) => ({ ...listing, status: listing.type, image: listing.imageUrl || "/hero-car.svg", mileage: "Contact for details" }));
 }

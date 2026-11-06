@@ -3,8 +3,8 @@ import { apiBase } from "../services/listings";
 
 const initial = { title: "", description: "", make: "", model: "", year: new Date().getFullYear(), location: "", transmission: "Automatic", fuel: "Petrol", body: "Sedan", price: "", type: "sale", imageUrl: "" };
 
-function ListingForm({ onClose, onSuccess }) {
-  const [form, setForm] = useState(initial);
+function ListingForm({ onClose, onSuccess, initialType = "sale" }) {
+  const [form, setForm] = useState(() => ({ ...initial, type: initialType }));
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const update = (event) => setForm((current) => ({ ...current, [event.target.name]: event.target.value }));
@@ -14,7 +14,7 @@ function ListingForm({ onClose, onSuccess }) {
     setBusy(true);
     setError("");
     try {
-      const response = await fetch(`${apiBase}/api/listings`, { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...form, year: Number(form.year), price: Number(form.price) }) });
+      const response = await fetch(`${apiBase}/api/listings`, { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...form, imageUrl: form.imageUrl.trim() || undefined, year: Number(form.year), price: Number(form.price) }) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not create listing.");
       onSuccess();

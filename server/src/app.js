@@ -86,7 +86,7 @@ app.get("/api/listings", async (req, res, next) => {
     if (params.maxPrice) add("price <= ?", params.maxPrice);
     const order = { price_asc: "price ASC", price_desc: "price DESC", newest: "created_at DESC" }[params.sort];
     const offset = (params.page - 1) * params.pageSize;
-    const sql = `SELECT id, title, make, model, year, location, transmission, fuel, body, price, type, image_url AS "imageUrl", created_at FROM listings WHERE ${filters.join(" AND ")} ORDER BY ${order} LIMIT $${values.length + 1} OFFSET $${values.length + 2}`;
+    const sql = `SELECT id, title, description, make, model, year, location, transmission, fuel, body, price, type, image_url AS "imageUrl", created_at FROM listings WHERE ${filters.join(" AND ")} ORDER BY ${order} LIMIT $${values.length + 1} OFFSET $${values.length + 2}`;
     const result = await query(sql, [...values, params.pageSize, offset]);
     const count = await query(`SELECT COUNT(*)::int AS total FROM listings WHERE ${filters.join(" AND ")}`, values);
     res.json({ listings: result.rows, total: count.rows[0].total, page: params.page, pageSize: params.pageSize });

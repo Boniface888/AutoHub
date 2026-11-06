@@ -28,7 +28,7 @@ function Navbar({ user, onChoose = () => {}, onAction = () => {} }) {
         >
           <a href="#browse" onClick={() => handleChoose("sale")}>Buy</a>
           <a href="#browse" onClick={() => handleChoose("rent")}>Rent</a>
-          <a href="#browse" onClick={() => handleAction("sell")}>Sell your car</a>
+          <a href="#list-your-car" onClick={() => handleAction("list-section")}>Sell your car</a>
         </nav>
       )}
 

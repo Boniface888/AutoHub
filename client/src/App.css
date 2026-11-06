@@ -219,3 +219,24 @@
   .detail-modal { width: min(100%, 430px); }
   .modal-content { padding: 20px 18px; }
 }
+
+.seller-section { padding: 76px 24px 70px; background: #fcfbf8; }
+.seller-heading { max-width: 1110px; margin: 0 auto 27px; }
+.seller-heading .eyebrow { margin: 0 0 11px; color: #829083; font-size: 9px; }
+.seller-heading h2 { margin: 0 0 8px; color: #202b23; font-family: var(--display); font-size: 35px; font-weight: 500; letter-spacing: -1px; line-height: 1.2; }
+.seller-heading > p:last-child { max-width: 55ch; margin: 0; color: #7d8179; font-size: 12px; line-height: 1.7; }
+.seller-options { display: grid; max-width: 1110px; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin: 0 auto; }
+.seller-option { display: flex; min-height: 220px; flex-direction: column; align-items: flex-start; padding: 25px 27px; border: 1px solid #e7e8e0; background: white; }
+.seller-option-sale { border-color: #dce5dc; background: linear-gradient(135deg, #f5f7f1, #fff 70%); }
+.seller-option-rent { background: linear-gradient(135deg, #f7f5ef, #fff 70%); }
+.seller-option-top { display: flex; width: 100%; align-items: center; justify-content: space-between; color: #748276; font-size: 9px; font-weight: 700; letter-spacing: 1.4px; }
+.seller-option-top span:last-child { display: grid; width: 32px; height: 32px; place-items: center; color: #3b5943; border: 1px solid #dfe5dd; border-radius: 50%; font-size: 15px; }
+.seller-option h3 { margin: 18px 0 7px; color: #29372e; font-family: var(--display); font-size: 24px; font-weight: 500; letter-spacing: -.4px; }
+.seller-option p { max-width: 43ch; margin: 0 0 20px; color: #7d8179; font-size: 11px; line-height: 1.65; }
+.seller-option .button { gap: 12px; margin-top: auto; }
+.seller-review-note { display: flex; max-width: 1110px; align-items: center; gap: 8px; margin: 17px auto 0; color: #848a80; font-size: 10px; }
+.seller-review-note span { color: #4f7658; font-size: 14px; }
+.seller-option { transition: transform .2s, box-shadow .2s; }
+.seller-option:hover { transform: translateY(-2px); box-shadow: 0 12px 30px rgba(33,47,37,.07); }
+@media (max-width: 700px) { .seller-section { padding: 58px 20px 52px; } .seller-options { gap: 12px; } .seller-option { min-height: 230px; padding: 21px; } }
+@media (max-width: 560px) { .seller-section { padding: 45px 14px; } .seller-heading h2 { font-size: 30px; } .seller-options { grid-template-columns: 1fr; gap: 11px; } .seller-option { min-height: 205px; padding: 20px; } .seller-option h3 { margin-top: 14px; font-size: 22px; } .seller-review-note { align-items: flex-start; line-height: 1.6; } }
