@@ -81,6 +81,7 @@ export function TermsDocument({ operator = {} }) {
     ["Website", operator.website]
   ];
   const configured = fields.some(([, value]) => Boolean(value));
+  const hasRequiredOperatorDetails = [operator.name, operator.status, operator.address, operator.phone, operator.email].every(Boolean);
 
   return (
     <div className="terms-document">
@@ -91,11 +92,8 @@ export function TermsDocument({ operator = {} }) {
       </div>
       <section className="terms-operator">
         <h3>Marketplace operator details</h3>
-        {configured ? (
-          <dl>{fields.filter(([, value]) => value).map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
-        ) : (
-          <p className="terms-configuration-note">Operator identity and contact details are being configured and must be completed before public launch.</p>
-        )}
+        {configured && <dl>{fields.filter(([, value]) => value).map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>}
+        {!hasRequiredOperatorDetails && <p className="terms-configuration-note">The operator’s legal name and status, business or mailing address, support phone, and support email are not yet configured. Complete these details before public use.</p>}
       </section>
       {termsSections.map((section) => (
         <section className="terms-section" key={section.title}>
