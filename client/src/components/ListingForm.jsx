@@ -8,6 +8,15 @@ const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
 const requiredViews = ["front", "rear", "interior"];
 const viewLabels = { front: "Front view", rear: "Rear view", interior: "Interior", other: "Other view" };
 
+function formatPrice(value) {
+  const cleaned = value.replace(/[^\d.]/g, "");
+  const [wholePart = "", ...decimalParts] = cleaned.split(".");
+  const whole = wholePart.replace(/^0+(?=\d)/, "");
+  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  if (!decimalParts.length) return grouped;
+  return `${grouped}.${decimalParts.join("").slice(0, 2)}`;
+}
+
 function ListingForm({ onClose, onSuccess, initialType = "sale", user }) {
   const [form, setForm] = useState(() => ({ ...initial, type: initialType, contactEmail: user?.email || "" }));
   const [photos, setPhotos] = useState([]);
@@ -15,6 +24,7 @@ function ListingForm({ onClose, onSuccess, initialType = "sale", user }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [uploadMessage, setUploadMessage] = useState("");
+  const priceInputRef = useRef(null);
 
   useEffect(() => {
     photosRef.current = photos;
@@ -25,6 +35,24 @@ function ListingForm({ onClose, onSuccess, initialType = "sale", user }) {
   }, []);
 
   const update = (event) => setForm((current) => ({ ...current, [event.target.name]: event.target.value }));
+
+  function updatePrice(event) {
+    const input = event.target;
+    const rawValue = input.value;
+    const logicalCaret = rawValue.slice(0, input.selectionStart ?? rawValue.length).replace(/[^\d.]/g, "").length;
+    const formatted = formatPrice(rawValue);
+    setForm((current) => ({ ...current, price: formatted }));
+    requestAnimationFrame(() => {
+      if (priceInputRef.current !== input) return;
+      let seen = 0;
+      let caret = formatted.length;
+      for (let index = 0; index < formatted.length; index += 1) {
+        if (/[\d.]/.test(formatted[index])) seen += 1;
+        if (seen >= logicalCaret) { caret = index + 1; break; }
+      }
+      input.setSelectionRange(caret, caret);
+    });
+  }
 
   function selectPhotos(event) {
     const files = Array.from(event.target.files || []);
@@ -99,6 +127,11 @@ function ListingForm({ onClose, onSuccess, initialType = "sale", user }) {
   async function submit(event) {
     event.preventDefault();
     setError("");
+    const numericPrice = Number(form.price.replaceAll(",", ""));
+    if (!Number.isFinite(numericPrice) || numericPrice <= 0 || numericPrice > 100_000_000) {
+      setError("Enter a price greater than 0 and no more than GH₵ 100,000,000.");
+      return;
+    }
     if (photos.length < 3) {
       setError("Add at least three photos: front, rear, and interior views.");
       return;
@@ -133,7 +166,7 @@ function ListingForm({ onClose, onSuccess, initialType = "sale", user }) {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, year: Number(form.year), price: Number(form.price), images: uploadedPhotos }),
+        body: JSON.stringify({ ...form, year: Number(form.year), price: numericPrice, images: uploadedPhotos }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not create listing.");
@@ -163,7 +196,7 @@ function ListingForm({ onClose, onSuccess, initialType = "sale", user }) {
           <label>Fuel<select name="fuel" value={form.fuel} onChange={update}><option>Petrol</option><option>Diesel</option><option>Hybrid</option><option>Electric</option></select></label>
           <label>Body type<input name="body" required minLength="2" maxLength="40" placeholder="SUV" value={form.body} onChange={update} /></label>
           <label>Listing type<select name="type" value={form.type} onChange={update}><option value="sale">For sale</option><option value="rent">For rent</option></select></label>
-          <label className="wide">Price (GH₵{form.type === "rent" ? " per day" : ""})<input name="price" type="number" min="1" step="0.01" required value={form.price} onChange={update} /></label>
+          <label className="wide">Price (GH₵{form.type === "rent" ? " per day" : ""})<input ref={priceInputRef} name="price" type="text" inputMode="decimal" autoComplete="off" placeholder="185,000" required value={form.price} onChange={updatePrice} aria-describedby="listing-price-help" /><small id="listing-price-help">Commas are added automatically while you type.</small></label>
           <div className="listing-photo-field wide">
             <div className="listing-photo-heading">
               <label htmlFor="listing-photos">Car photos</label>
