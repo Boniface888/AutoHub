@@ -20,6 +20,15 @@ const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 10, standardHea
 const apiLimiter = rateLimit({ windowMs: 60 * 1000, limit: 120, standardHeaders: "draft-8", legacyHeaders: false });
 const imageSignatureLimiter = rateLimit({ windowMs: 60 * 1000, limit: 30, standardHeaders: "draft-8", legacyHeaders: false });
 const inquiryLimiter = rateLimit({ windowMs: 60 * 1000, limit: 10, standardHeaders: "draft-8", legacyHeaders: false });
+const CURRENT_TERMS_VERSION = "autohub-terms-2026-11-09-v1";
+async function requireCurrentTerms(req, res, next) {
+  try {
+    const result = await query("SELECT terms_version FROM users WHERE id=$1", [req.auth.sub]);
+    if (!result.rows[0]) return res.status(401).json({ error: "Account no longer exists." });
+    if (result.rows[0].terms_version !== CURRENT_TERMS_VERSION) return res.status(428).json({ error: "Read and accept the current AutoHub Terms and Conditions to continue.", termsVersion: CURRENT_TERMS_VERSION });
+    return next();
+  } catch (error) { return next(error); }
+}
 
 async function sendOwnerEmail({ to, subject, text }) {
   const { RESEND_API_KEY: apiKey, EMAIL_FROM: emailFrom } = process.env;
@@ -94,12 +103,24 @@ app.use((req, res, next) => {
 app.get("/api/health", async (_req, res, next) => {
   try { await query("SELECT 1"); res.json({ status: "ok" }); } catch (error) { next(error); }
 });
+app.get("/api/legal/terms", (_req, res) => res.json({
+  version: CURRENT_TERMS_VERSION,
+  operator: {
+    name: process.env.OPERATOR_LEGAL_NAME || "",
+    status: process.env.OPERATOR_LEGAL_STATUS || "",
+    address: process.env.OPERATOR_ADDRESS || "",
+    phone: process.env.SUPPORT_PHONE || "",
+    email: process.env.SUPPORT_EMAIL || "",
+    website: process.env.APP_URL || process.env.FRONTEND_ORIGIN || ""
+  }
+}));
 
 app.post("/api/auth/register", authLimiter, async (req, res, next) => {
   try {
     const { email, password } = credentialsSchema.parse(req.body);
+    if (req.body.termsAccepted !== true || req.body.termsVersion !== CURRENT_TERMS_VERSION) return res.status(428).json({ error: "Read and accept the current AutoHub Terms and Conditions before creating an account.", termsVersion: CURRENT_TERMS_VERSION });
     const passwordHash = await bcrypt.hash(password, 12);
-    const result = await query("INSERT INTO users (email, password_hash) VALUES ($1, $2) RETURNING id, email, role", [email, passwordHash]);
+    const result = await query("INSERT INTO users (email, password_hash, terms_version, terms_accepted_at) VALUES ($1, $2, $3, NOW()) RETURNING id, email, role, terms_version AS \"termsVersion\"", [email, passwordHash, CURRENT_TERMS_VERSION]);
     issueSession(res, result.rows[0]);
     res.status(201).json({ user: result.rows[0] });
   } catch (error) {
@@ -111,11 +132,11 @@ app.post("/api/auth/register", authLimiter, async (req, res, next) => {
 app.post("/api/auth/login", authLimiter, async (req, res, next) => {
   try {
     const { email, password } = credentialsSchema.parse(req.body);
-    const result = await query("SELECT id, email, role, password_hash FROM users WHERE email = $1", [email]);
+    const result = await query("SELECT id, email, role, password_hash, terms_version AS \"termsVersion\" FROM users WHERE email = $1", [email]);
     const user = result.rows[0];
     if (!user || !(await bcrypt.compare(password, user.password_hash))) return res.status(401).json({ error: "Email or password is incorrect." });
     issueSession(res, user);
-    res.json({ user: { id: user.id, email: user.email, role: user.role } });
+    res.json({ user: { id: user.id, email: user.email, role: user.role, termsVersion: user.termsVersion } });
   } catch (error) { next(error); }
 });
 
@@ -186,15 +207,23 @@ app.post("/api/auth/reset-password", authLimiter, async (req, res, next) => {
 });
 
 app.post("/api/auth/logout", (_req, res) => { clearSession(res); res.status(204).end(); });
+app.post("/api/legal/accept-terms", requireAuth, async (req, res, next) => {
+  try {
+    const accepted = z.object({ accepted: z.literal(true), termsVersion: z.literal(CURRENT_TERMS_VERSION) }).parse(req.body);
+    const result = await query('UPDATE users SET terms_version=$1, terms_accepted_at=NOW() WHERE id=$2 RETURNING id, email, role, terms_version AS "termsVersion", terms_accepted_at AS "termsAcceptedAt"', [accepted.termsVersion, req.auth.sub]);
+    if (!result.rows[0]) return res.status(401).json({ error: "Account no longer exists." });
+    res.json({ user: result.rows[0] });
+  } catch (error) { next(error); }
+});
 app.get("/api/auth/me", requireAuth, async (req, res, next) => {
   try {
-    const result = await query("SELECT id, email, role, created_at FROM users WHERE id = $1", [req.auth.sub]);
+    const result = await query('SELECT id, email, role, created_at, terms_version AS "termsVersion", terms_accepted_at AS "termsAcceptedAt" FROM users WHERE id = $1', [req.auth.sub]);
     if (!result.rows[0]) return res.status(401).json({ error: "Account no longer exists." });
     res.json({ user: result.rows[0] });
   } catch (error) { next(error); }
 });
 
-app.post("/api/media/signature", requireAuth, imageSignatureLimiter, (req, res) => {
+app.post("/api/media/signature", requireAuth, requireCurrentTerms, imageSignatureLimiter, (req, res) => {
   const { CLOUDINARY_CLOUD_NAME: cloudName, CLOUDINARY_API_KEY: apiKey, CLOUDINARY_API_SECRET: apiSecret } = process.env;
   if (!cloudName || !apiKey || !apiSecret) return res.status(503).json({ error: "Car photo uploads are not configured yet." });
 
@@ -207,7 +236,7 @@ app.post("/api/media/signature", requireAuth, imageSignatureLimiter, (req, res) 
   const signature = createHash("sha1").update(`${toSign}${apiSecret}`).digest("hex");
   res.json({ cloudName, apiKey, timestamp, folder, allowedFormats, publicId: imageId, signature });
 });
-app.get("/api/listings", async (req, res, next) => {
+app.get("/api/listings", requireAuth, requireCurrentTerms, async (req, res, next) => {
   try {
     const params = z.object({ type: z.enum(["sale", "rent"]).optional(), search: z.string().trim().max(80).optional(), location: z.string().trim().max(100).optional(), maxPrice: z.coerce.number().positive().optional(), sort: z.enum(["price_asc", "price_desc", "newest"]).default("newest"), page: z.coerce.number().int().min(1).default(1), pageSize: z.coerce.number().int().min(1).max(48).default(12) }).parse(req.query);
     const filters = ["status = 'active'"];
@@ -230,7 +259,7 @@ app.get("/api/listings", async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-app.post("/api/listings", requireAuth, async (req, res, next) => {
+app.post("/api/listings", requireAuth, requireCurrentTerms, async (req, res, next) => {
   try {
     const listing = listingSchema.parse(req.body);
     const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
@@ -249,7 +278,7 @@ app.post("/api/listings", requireAuth, async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-app.post("/api/listings/:id/inquiries", requireAuth, inquiryLimiter, async (req, res, next) => {
+app.post("/api/listings/:id/inquiries", requireAuth, requireCurrentTerms, inquiryLimiter, async (req, res, next) => {
   try {
     const inquiry = inquirySchema.parse(req.body);
     const listingId = z.string().uuid().parse(req.params.id);
@@ -272,18 +301,20 @@ app.post("/api/listings/:id/inquiries", requireAuth, inquiryLimiter, async (req,
   } catch (error) { next(error); }
 });
 
-app.get("/api/owner/listings", requireAuth, async (req, res, next) => {
+app.get("/api/owner/listings", requireAuth, requireCurrentTerms, async (req, res, next) => {
   try {
     const result = await query(
-      `SELECT id,title,make,model,year,location,price,type,status,image_url AS "imageUrl",images,created_at AS "createdAt"
-       FROM listings WHERE owner_id=$1 ORDER BY created_at DESC`,
+      `SELECT l.id,l.title,l.make,l.model,l.year,l.location,l.price,l.type,l.status,l.image_url AS "imageUrl",l.images,l.created_at AS "createdAt",latest.reason AS "moderationReason"
+       FROM listings l
+       LEFT JOIN LATERAL (SELECT reason FROM listing_moderation_events WHERE listing_id=l.id ORDER BY created_at DESC LIMIT 1) latest ON true
+       WHERE l.owner_id=$1 ORDER BY l.created_at DESC`,
       [req.auth.sub],
     );
     res.json({ listings: result.rows });
   } catch (error) { next(error); }
 });
 
-app.patch("/api/owner/listings/:id/status", requireAuth, async (req, res, next) => {
+app.patch("/api/owner/listings/:id/status", requireAuth, requireCurrentTerms, async (req, res, next) => {
   try {
     const id = z.string().uuid().parse(req.params.id);
     const { action } = z.object({ action: z.enum(["take_down", "restore", "complete"]) }).parse(req.body);
@@ -302,7 +333,7 @@ app.patch("/api/owner/listings/:id/status", requireAuth, async (req, res, next) 
   } catch (error) { next(error); }
 });
 
-app.delete("/api/owner/listings/:id", requireAuth, async (req, res, next) => {
+app.delete("/api/owner/listings/:id", requireAuth, requireCurrentTerms, async (req, res, next) => {
   try {
     const id = z.string().uuid().parse(req.params.id);
     const listing = await query("SELECT id,type,images,image_url AS \"imageUrl\" FROM listings WHERE id=$1 AND owner_id=$2", [id, req.auth.sub]);
@@ -316,7 +347,7 @@ app.delete("/api/owner/listings/:id", requireAuth, async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-app.get("/api/owner/requests", requireAuth, async (req, res, next) => {
+app.get("/api/owner/requests", requireAuth, requireCurrentTerms, async (req, res, next) => {
   try {
     const [requests, unread] = await Promise.all([
       query(
@@ -341,7 +372,7 @@ app.get("/api/owner/requests", requireAuth, async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-app.post("/api/owner/requests/read", requireAuth, async (req, res, next) => {
+app.post("/api/owner/requests/read", requireAuth, requireCurrentTerms, async (req, res, next) => {
   try {
     const { sales, rentals } = z.object({ sales: z.array(z.string().uuid()).max(50), rentals: z.array(z.string().uuid()).max(50) }).parse(req.body);
     if (sales.length) await query(
@@ -356,7 +387,7 @@ app.post("/api/owner/requests/read", requireAuth, async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-app.post("/api/bookings", requireAuth, async (req, res, next) => {
+app.post("/api/bookings", requireAuth, requireCurrentTerms, async (req, res, next) => {
   const client = await pool.connect();
   try {
     const booking = bookingSchema.parse(req.body);
@@ -381,17 +412,26 @@ app.post("/api/bookings", requireAuth, async (req, res, next) => {
   } catch (error) { await client.query("ROLLBACK"); next(error); } finally { client.release(); }
 });
 
-app.get("/api/admin/listings", requireAuth, requireAdmin, async (_req, res, next) => {
-  try { const result = await query("SELECT * FROM listings WHERE status='pending' ORDER BY created_at ASC"); res.json({ listings: result.rows }); } catch (error) { next(error); }
+app.get("/api/admin/listings", requireAuth, requireCurrentTerms, requireAdmin, async (_req, res, next) => {
+  try { const result = await query('SELECT l.id,l.title,l.description,l.make,l.model,l.year,l.location,l.price,l.type,l.status,l.images,l.image_url AS "imageUrl",l.created_at AS "createdAt",owner.email AS "ownerEmail",latest.reason AS "moderationReason",latest.created_at AS "moderatedAt" FROM listings l JOIN users owner ON owner.id=l.owner_id LEFT JOIN LATERAL (SELECT reason,created_at FROM listing_moderation_events WHERE listing_id=l.id ORDER BY created_at DESC LIMIT 1) latest ON true WHERE l.status IN ($1,$2,$3,$4) ORDER BY CASE l.status WHEN $1 THEN 0 WHEN $2 THEN 1 WHEN $3 THEN 2 ELSE 3 END,l.created_at ASC', ["pending","active","removed","rejected"]); res.json({ listings: result.rows }); } catch (error) { next(error); }
 });
 
-app.patch("/api/admin/listings/:id", requireAuth, requireAdmin, async (req, res, next) => {
+app.patch("/api/admin/listings/:id", requireAuth, requireCurrentTerms, requireAdmin, async (req, res, next) => {
+  const client = await pool.connect();
   try {
-    const { status } = z.object({ status: z.enum(["active", "rejected", "removed"]) }).parse(req.body);
-    const result = await query("UPDATE listings SET status=$1, updated_at=NOW() WHERE id=$2 RETURNING id,status", [status, req.params.id]);
-    if (!result.rowCount) return res.status(404).json({ error: "Listing not found." });
-    res.json({ listing: result.rows[0] });
-  } catch (error) { next(error); }
+    const id = z.string().uuid().parse(req.params.id);
+    const { status, reason = "" } = z.object({ status: z.enum(["active", "rejected", "removed"]), reason: z.string().trim().max(500).optional() }).parse(req.body);
+    if ((status === "removed" || status === "rejected") && reason.trim().length < 12) return res.status(400).json({ error: "Add a clear moderation reason of at least 12 characters." });
+    await client.query("BEGIN");
+    const current = await client.query("SELECT id,status FROM listings WHERE id=$1 FOR UPDATE", [id]);
+    if (!current.rows[0]) { await client.query("ROLLBACK"); return res.status(404).json({ error: "Listing not found." }); }
+    if (["sold", "rented"].includes(current.rows[0].status)) { await client.query("ROLLBACK"); return res.status(409).json({ error: "Completed vehicle listings cannot be changed." }); }
+    const updated = await client.query("UPDATE listings SET status=$1,updated_at=NOW() WHERE id=$2 RETURNING id,status", [status,id]);
+    await client.query("INSERT INTO listing_moderation_events (listing_id,admin_id,previous_status,new_status,reason) VALUES ($1,$2,$3,$4,$5)", [id,req.auth.sub,current.rows[0].status,status,reason.trim()]);
+    await client.query("COMMIT");
+    res.json({ listing: updated.rows[0] });
+  } catch (error) { try { await client.query("ROLLBACK"); } catch {} next(error); }
+  finally { client.release(); }
 });
 
 const clientBuildPath = fileURLToPath(new URL("../../client/dist/", import.meta.url));

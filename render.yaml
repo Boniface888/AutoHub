@@ -20,6 +20,16 @@ services:
         sync: false
       - key: APP_URL
         value: https://autohub-marketplace.onrender.com
+      - key: OPERATOR_LEGAL_NAME
+        sync: false
+      - key: OPERATOR_LEGAL_STATUS
+        sync: false
+      - key: OPERATOR_ADDRESS
+        sync: false
+      - key: SUPPORT_PHONE
+        sync: false
+      - key: SUPPORT_EMAIL
+        sync: false
       - key: CLOUDINARY_CLOUD_NAME
         sync: false
       - key: CLOUDINARY_API_KEY

@@ -5,8 +5,13 @@ CREATE TABLE IF NOT EXISTS users (
   email TEXT NOT NULL UNIQUE,
   password_hash TEXT NOT NULL,
   role TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('member','admin')),
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  terms_version TEXT,
+  terms_accepted_at TIMESTAMPTZ
 );
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS terms_version TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS terms_accepted_at TIMESTAMPTZ;
 
 CREATE TABLE IF NOT EXISTS password_reset_tokens (
   user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
@@ -80,3 +85,15 @@ ALTER TABLE bookings DROP CONSTRAINT IF EXISTS bookings_listing_id_fkey;
 ALTER TABLE bookings ADD CONSTRAINT bookings_listing_id_fkey FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE CASCADE;
 ALTER TABLE listings DROP CONSTRAINT IF EXISTS listings_status_check;
 ALTER TABLE listings ADD CONSTRAINT listings_status_check CHECK (status IN ('pending','active','rejected','removed','paused','sold','rented'));
+
+
+CREATE TABLE IF NOT EXISTS listing_moderation_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  listing_id UUID NOT NULL REFERENCES listings(id) ON DELETE CASCADE,
+  admin_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  previous_status TEXT NOT NULL,
+  new_status TEXT NOT NULL,
+  reason TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS listing_moderation_events_listing_idx ON listing_moderation_events (listing_id, created_at DESC);

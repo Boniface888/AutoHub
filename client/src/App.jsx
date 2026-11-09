@@ -15,6 +15,8 @@ import BookingModal from "./components/BookingModal";
 import InquiryModal from "./components/InquiryModal";
 import RequestInbox from "./components/RequestInbox";
 import MyListings from "./components/MyListings";
+import TermsAcceptance from "./components/TermsAcceptance";
+import { CURRENT_TERMS_VERSION } from "./legal/termsVersion";
 
 const cars = [
   { id: 1, name: "Toyota Camry", year: 2022, location: "Accra", transmission: "Automatic", fuel: "Petrol", price: 185000, status: "sale", image: "https://images.unsplash.com/photo-1621007947382-bb3c3994e3fb?auto=format&fit=crop&w=900&q=85", mileage: "28,000 km", body: "Sedan" },
@@ -46,9 +48,14 @@ function App() {
   const hasRequestBaseline = useRef(false);
   const [listingRefresh, setListingRefresh] = useState(0);
   const [user, setUser] = useState(null);
+  const [termsOperator, setTermsOperator] = useState({});
+  const [termsOpen, setTermsOpen] = useState(false);
+  const [termsBusy, setTermsBusy] = useState(false);
+  const [termsError, setTermsError] = useState("");
+  const termsAccepted = user?.termsVersion === CURRENT_TERMS_VERSION;
 
   useEffect(() => {
-    if (!user) return undefined;
+    if (!user || user.termsVersion !== CURRENT_TERMS_VERSION) return undefined;
 
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
@@ -71,7 +78,7 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (!user) {
+    if (!user || user.termsVersion !== CURRENT_TERMS_VERSION) {
       knownUnreadRequests.current = new Set();
       hasRequestBaseline.current = false;
       return undefined;
@@ -102,6 +109,13 @@ function App() {
     return () => { active = false; window.clearInterval(timer); };
   }, [user]);
 
+  useEffect(() => {
+    fetch(apiBase + "/api/legal/terms")
+      .then((response) => response.ok ? response.json() : null)
+      .then((data) => { if (data?.operator) setTermsOperator(data.operator); })
+      .catch(() => {});
+  }, []);
+
   const results = useMemo(() => {
     if (apiListings !== null) return apiListings;
     const query = filters.search.trim().toLowerCase();
@@ -113,19 +127,37 @@ function App() {
       .sort((a, b) => filters.sort === "price-low" ? a.price - b.price : filters.sort === "price-high" ? b.price - a.price : b.year - a.year);
   }, [filters, apiListings]);
 
+  async function acceptCurrentTerms() {
+    setTermsBusy(true);
+    setTermsError("");
+    try {
+      const response = await fetch(apiBase + "/api/legal/accept-terms", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accepted: true, termsVersion: CURRENT_TERMS_VERSION })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Could not save your acceptance.");
+      setUser(data.user);
+    } catch (error) {
+      setTermsError(error.message === "Failed to fetch" ? "AutoHub could not save your acceptance. Check your connection and try again." : error.message);
+    } finally {
+      setTermsBusy(false);
+    }
+  }
   const update = (patch) => setFilters((current) => ({ ...current, ...patch }));
   const handleRequestsRead = useCallback((remainingCount) => setRequestCount(remainingCount), []);
   const handleOwnerListingsChanged = useCallback((count) => {
     setHasListings(count > 0);
     setListingRefresh((current) => current + 1);
   }, []);
-
   return (
     <>
       <Navbar user={user} hasListings={hasListings} requestCount={requestCount} onChoose={(type) => { update({ type }); document.getElementById("browse")?.scrollIntoView({ behavior: "smooth" }); }} onAction={(action) => action === "logout" ? fetch(`${apiBase}/api/auth/logout`, { method: "POST", credentials: "include" }).then(() => { setUser(null); setRequestCount(0); setHasListings(false); }) : action === "admin" ? setAdminOpen(true) : action === "my-listings" ? setMyListingsOpen(true) : action === "requests" ? setRequestInboxOpen(true) : action === "list-section" ? document.getElementById("list-your-car")?.scrollIntoView({ behavior: "smooth" }) : action === "sell" && user ? (setListingType("sale"), setListingOpen(true)) : setAuthMode(action === "sell" ? "signup" : action)} />
       <main>
         <Hero user={user} onChoose={(type) => { update({ type }); document.getElementById("browse")?.scrollIntoView({ behavior: "smooth" }); }} />
-        {user && (
+        {user && termsAccepted && (
           <>
             <SearchBar filters={filters} onChange={update} user={user} />
             <section className="cars-section" id="browse">
@@ -141,9 +173,11 @@ function App() {
           </>
         )}
       </main>
-      <footer className={`site-footer${user ? "" : " site-footer-guest"}`}><a className="brand" href="#top"><span className="brand-mark">A</span> AutoHub</a><span>{user ? "Find your next drive." : "Made for the way Ghana moves."}</span><span>© {new Date().getFullYear()} AutoHub Ghana</span></footer>
+      <footer className={`site-footer${user ? "" : " site-footer-guest"}`}><a className="brand" href="#top"><span className="brand-mark">A</span> AutoHub</a><span>{user ? "Find your next drive." : "Made for the way Ghana moves."}</span><button className="footer-terms-button" onClick={() => setTermsOpen(true)}>Terms and Conditions</button><span>© {new Date().getFullYear()} AutoHub Ghana</span></footer>
       {notice && <div className="toast" role="status">{notice}<button onClick={() => setNotice("")} aria-label="Dismiss">×</button></div>}
-      {authMode && <AuthModal mode={authMode} resetToken={resetToken} onClose={() => setAuthMode(null)} onSuccess={(nextUser) => { setUser(nextUser); setAuthMode(null); }} />}
+      {authMode && <AuthModal mode={authMode} operator={termsOperator} resetToken={resetToken} onClose={() => setAuthMode(null)} onSuccess={(nextUser) => { setUser(nextUser); setAuthMode(null); }} />}
+      {user && !termsAccepted && <TermsAcceptance operator={termsOperator} onAccept={acceptCurrentTerms} busy={termsBusy} error={termsError} />}
+      {termsOpen && <TermsAcceptance operator={termsOperator} onClose={() => setTermsOpen(false)} />}
       {adminOpen && user?.role === "admin" && <AdminDashboard onClose={() => setAdminOpen(false)} />}
       {listingOpen && <ListingForm initialType={listingType} user={user} onClose={() => setListingOpen(false)} onSuccess={() => { setListingOpen(false); setHasListings(true); update({ type: listingType, search: "", location: "", maxPrice: "" }); setListingRefresh((tick) => tick + 1); setNotice("Your car listing is now live."); }} />}
       {selectedCar && <div className="modal-backdrop" role="presentation" onClick={() => setSelectedCar(null)}><section className="detail-modal" role="dialog" aria-modal="true" aria-labelledby="detail-title" onClick={(event) => event.stopPropagation()}><button className="modal-close" onClick={() => setSelectedCar(null)} aria-label="Close">×</button><CarGallery images={selectedCar.images || []} fallbackImage={selectedCar.image} alt={selectedCar.name} /><div className="modal-content"><p className="eyebrow">{selectedCar.status === "sale" ? "FOR SALE" : "AVAILABLE TO RENT"} · {selectedCar.location.toUpperCase()}</p><h2 id="detail-title">{selectedCar.name}</h2><div className="detail-specs"><span>{selectedCar.year}</span><span>{selectedCar.transmission}</span><span>{selectedCar.fuel}</span><span>{selectedCar.mileage}</span></div><strong className="modal-price">GH₵ {selectedCar.price.toLocaleString()}{selectedCar.rate ? <small> / day</small> : ""}</strong><p>{selectedCar.description || (user ? (selectedCar.status === "rent" ? "Choose your dates and send a rental request to the owner." : "Contact the listing owner to learn more and arrange a viewing.") : "Sign in or create an account to contact sellers and request rentals.")}</p><button className="button button-primary" onClick={() => { const car = selectedCar; setSelectedCar(null); if (!user) setAuthMode("login"); else if (car.status === "rent") { if (typeof car.id === "string") setBookingCar(car); else setNotice("Rental requests are available for active database listings."); } else if (typeof car.id === "string") setInquiryCar(car); else setNotice("Contact the seller after choosing a listed vehicle."); }}>{user ? (selectedCar.status === "rent" ? "Request rental" : "Contact seller") : "Sign in to continue"}</button></div></section></div>}

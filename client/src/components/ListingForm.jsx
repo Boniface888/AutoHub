@@ -194,6 +194,7 @@ function ListingForm({ onClose, onSuccess, initialType = "sale", user }) {
             )}
           </div>
           <label className="wide">Description<textarea name="description" rows="3" maxLength="4000" placeholder="Tell buyers or renters about the car’s condition, features, and anything else they should know." value={form.description} onChange={update} /></label>
+          <p className="listing-legal-help wide">Include all important fees and terms. Where required by law, provide your legal name and status, business or service address, and contact details, plus the sale handover or rental, cancellation, return, and refund conditions that apply. Do not include identity numbers or passwords.</p>
           <div className="listing-contact-heading wide"><strong>Your contact details</strong><span>Interested buyers or renters can reach you. We’ll email you when someone contacts you.</span></div>
           <label>Contact email<input name="contactEmail" type="email" required maxLength="254" autoComplete="email" value={form.contactEmail} onChange={update} /></label>
           <label>Contact phone<input name="contactPhone" type="tel" required minLength="7" maxLength="20" autoComplete="tel" placeholder="+233 20 123 4567" value={form.contactPhone} onChange={update} /></label>

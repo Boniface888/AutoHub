@@ -1,16 +1,31 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { apiBase } from "../services/listings";
+import { TermsDocument } from "../legal/terms";
+import { CURRENT_TERMS_VERSION } from "../legal/termsVersion";
 
-function AuthModal({ mode, resetToken, onClose, onSuccess }) {
+function AuthModal({ mode, resetToken, operator, onClose, onSuccess }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [step, setStep] = useState(mode === "signup" ? "signup" : mode === "reset" ? "reset" : "login");
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [termsReadToEnd, setTermsReadToEnd] = useState(false);
+  const termsRef = useRef(null);
   const isSignup = step === "signup";
   const isForgot = step === "forgot";
   const isReset = step === "reset";
+
+  useEffect(() => {
+    const element = termsRef.current;
+    if (isSignup && element && element.scrollHeight <= element.clientHeight + 2) setTermsReadToEnd(true);
+  }, [isSignup]);
+
+  function handleTermsScroll(event) {
+    const element = event.currentTarget;
+    if (element.scrollTop + element.clientHeight >= element.scrollHeight - 8) setTermsReadToEnd(true);
+  }
 
   async function submit(event) {
     event.preventDefault();
@@ -18,9 +33,13 @@ function AuthModal({ mode, resetToken, onClose, onSuccess }) {
     setMessage("");
     setBusy(true);
     const endpoint = isSignup ? "register" : step === "login" ? "login" : isForgot ? "forgot-password" : "reset-password";
-    const body = isReset ? { token: resetToken, password } : isForgot ? { email } : { email, password };
+    const body = isReset
+      ? { token: resetToken, password }
+      : isForgot
+        ? { email }
+        : { email, password, ...(isSignup ? { termsAccepted: true, termsVersion: CURRENT_TERMS_VERSION } : {}) };
     try {
-      const response = await fetch(`${apiBase}/api/auth/${endpoint}`, {
+      const response = await fetch(apiBase + "/api/auth/" + endpoint, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -33,7 +52,7 @@ function AuthModal({ mode, resetToken, onClose, onSuccess }) {
       } else if (isForgot) {
         setMessage(data.message);
       } else {
-        window.history.replaceState({}, "", `${window.location.pathname}${window.location.hash}`);
+        window.history.replaceState({}, "", window.location.pathname + window.location.hash);
         setStep("login");
         setPassword("");
         setMessage(data.message);
@@ -46,7 +65,7 @@ function AuthModal({ mode, resetToken, onClose, onSuccess }) {
   }
 
   function dismiss() {
-    if (resetToken) window.history.replaceState({}, "", `${window.location.pathname}${window.location.hash}`);
+    if (resetToken) window.history.replaceState({}, "", window.location.pathname + window.location.hash);
     onClose();
   }
 
@@ -55,12 +74,19 @@ function AuthModal({ mode, resetToken, onClose, onSuccess }) {
     setPassword("");
     setError("");
     setMessage("");
+    if (nextStep === "signup") {
+      setTermsAccepted(false);
+      setTermsReadToEnd(false);
+    }
   }
 
   const title = isSignup ? "Create your account" : isForgot ? "Forgot your password?" : isReset ? "Choose a new password" : "Welcome back";
   const intro = isSignup ? "Save listings and connect with car owners." : isForgot ? "Enter your account email and we’ll send you a secure reset link." : isReset ? "Choose a new password for your AutoHub account." : "Sign in to continue your journey.";
 
-  return <div className="modal-backdrop" role="presentation" onClick={dismiss}><section className="auth-modal" role="dialog" aria-modal="true" aria-labelledby="auth-title" onClick={(event) => event.stopPropagation()}><button className="modal-close" onClick={dismiss} aria-label="Close">×</button><span className="brand-mark">A</span><p className="eyebrow">YOUR AUTOHUB ACCOUNT</p><h2 id="auth-title">{title}</h2><p className="auth-intro">{intro}</p><form onSubmit={submit}>{!isReset && <label>Email address<input type="email" autoComplete="email" required maxLength={254} value={email} onChange={(event) => setEmail(event.target.value)} /></label>}{(isSignup || step === "login" || isReset) && <label>{isReset ? "New password" : "Password"}<input type="password" autoComplete={isSignup || isReset ? "new-password" : "current-password"} required minLength={isSignup || isReset ? 10 : 1} maxLength={128} value={password} onChange={(event) => setPassword(event.target.value)} /><small>{isSignup || isReset ? "Use at least 10 characters." : ""}</small></label>}{step === "login" && <button type="button" className="auth-text-link" onClick={() => changeStep("forgot")}>Forgot password?</button>}{error && <p className="auth-error" role="alert">{error}</p>}{message && <p className="auth-message" role="status">{message}</p>}<button className="button button-primary auth-submit" disabled={busy}>{busy ? "Please wait…" : isSignup ? "Create account" : isForgot ? "Send reset link" : isReset ? "Save new password" : "Sign in"}</button></form>{isForgot && <button type="button" className="auth-text-link auth-back-link" onClick={() => changeStep("login")}>Back to sign in</button>}</section></div>;
+  return <div className="modal-backdrop" role="presentation" onClick={dismiss}><section className="auth-modal" role="dialog" aria-modal="true" aria-labelledby="auth-title" onClick={(event) => event.stopPropagation()}><button className="modal-close" onClick={dismiss} aria-label="Close">×</button><span className="brand-mark">A</span><p className="eyebrow">YOUR AUTOHUB ACCOUNT</p><h2 id="auth-title">{title}</h2><p className="auth-intro">{intro}</p>
+    {isSignup && !termsAccepted && <section className="signup-terms" aria-label="Required Terms and Conditions"><p className="signup-terms-title">Read and accept the Terms and Conditions to create your account.</p><div className="signup-terms-scroll" ref={termsRef} onScroll={handleTermsScroll} tabIndex={0}><TermsDocument operator={operator} /></div><p className="terms-read-hint">{termsReadToEnd ? "You’ve reached the end of the Terms." : "Scroll through the Terms to continue."}</p><label className={"terms-checkbox" + (!termsReadToEnd ? " is-disabled" : "")}><input type="checkbox" disabled={!termsReadToEnd} checked={termsAccepted} onChange={(event) => setTermsAccepted(event.target.checked)} /><span>I have read and agree to the AutoHub Terms and Conditions.</span></label></section>}
+    {(!isSignup || termsAccepted) && <form onSubmit={submit}>{!isReset && <label>Email address<input type="email" autoComplete="email" required maxLength={254} value={email} onChange={(event) => setEmail(event.target.value)} /></label>}{(isSignup || step === "login" || isReset) && <label>{isReset ? "New password" : "Password"}<input type="password" autoComplete={isSignup || isReset ? "new-password" : "current-password"} required minLength={isSignup || isReset ? 10 : 1} maxLength={128} value={password} onChange={(event) => setPassword(event.target.value)} /><small>{isSignup || isReset ? "Use at least 10 characters." : ""}</small></label>}{step === "login" && <button type="button" className="auth-text-link" onClick={() => changeStep("forgot")}>Forgot password?</button>}{error && <p className="auth-error" role="alert">{error}</p>}{message && <p className="auth-message" role="status">{message}</p>}<button className="button button-primary auth-submit" disabled={busy}>{busy ? "Please wait…" : isSignup ? "Create account" : isForgot ? "Send reset link" : isReset ? "Save new password" : "Sign in"}</button></form>}
+    {isForgot && <button type="button" className="auth-text-link auth-back-link" onClick={() => changeStep("login")}>Back to sign in</button>}</section></div>;
 }
 
 export default AuthModal;
