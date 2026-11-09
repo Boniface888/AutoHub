@@ -615,6 +615,25 @@
 .admin-actions { display: flex; justify-content: flex-end; gap: 7px; }
 .admin-actions button { min-height: 36px; padding: 0 12px; border: 0; border-radius: 999px; font-size: 9px; font-weight: 700; cursor: pointer; }
 .admin-actions button:disabled { opacity: .55; cursor: wait; }
+.admin-stat-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin:20px 0 28px; }
+.admin-stat { display:grid; gap:7px; padding:15px; border:1px solid #e4ebe4; border-radius:13px; background:#fff; }
+.admin-stat span { color:#748078; font-size:10px; }
+.admin-stat strong { color:#294b35; font-family:var(--display); font-size:26px; font-weight:500; }
+.admin-section-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:25px 0 10px; }
+.admin-section-heading h3 { margin:0; color:#2b3d31; font-family:var(--display); font-size:18px; font-weight:500; }
+.admin-section-heading p { margin:4px 0 0; color:#748078; font-size:10px; line-height:1.5; }
+.admin-mark-read,.admin-load-more { padding:9px 13px; border:1px solid #dce6dc; border-radius:999px; color:#315f43; background:#fff; font-size:10px; font-weight:700; cursor:pointer; }
+.admin-activity-list { display:grid; gap:7px; }
+.admin-activity { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 14px; border:1px solid #e5ebe5; border-radius:12px; background:#fff; }
+.admin-activity > div { display:grid; gap:5px; min-width:0; }
+.admin-activity strong { color:#34463a; font-size:11px; font-weight:600; line-height:1.5; }
+.admin-activity small { color:#879087; font-size:9px; }
+.admin-activity-unread { border-color:#c5ddca; background:#f5faf5; }
+.admin-unread-dot { flex:none; width:8px; height:8px; border-radius:50%; background:#3c8052; }
+.admin-event-type { flex:none; color:#748078; font-size:8px; text-transform:uppercase; letter-spacing:.4px; }
+.admin-empty { padding:13px; color:#879087; font-size:11px; }
+.admin-load-more { display:block; margin:15px auto 0; }
+@media (max-width:620px) { .admin-stat-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } .admin-activity { align-items:flex-start; flex-direction:column; } .admin-mark-read { flex:none; } }
 .approve-button { color: #fff; background: #315f43; }
 .reject-button { color: #994e45; background: #f8ecea; }
 @media (max-width: 650px) {

@@ -21,6 +21,14 @@ const apiLimiter = rateLimit({ windowMs: 60 * 1000, limit: 120, standardHeaders:
 const imageSignatureLimiter = rateLimit({ windowMs: 60 * 1000, limit: 30, standardHeaders: "draft-8", legacyHeaders: false });
 const inquiryLimiter = rateLimit({ windowMs: 60 * 1000, limit: 10, standardHeaders: "draft-8", legacyHeaders: false });
 const CURRENT_TERMS_VERSION = "autohub-terms-2026-11-09-v1";
+async function logSiteActivity({ eventType, actorId = null, listingId = null, summary, details = {}, isNotification = false }, client = pool) {
+  try {
+    await client.query(
+      "INSERT INTO site_activity_events (event_type,actor_id,listing_id,summary,details,is_notification) VALUES ($1,$2,$3,$4,$5::jsonb,$6)",
+      [eventType, actorId, listingId, summary, JSON.stringify(details), isNotification],
+    );
+  } catch (error) { console.error("Could not record AutoHub activity", error); }
+}
 async function requireCurrentTerms(req, res, next) {
   try {
     const result = await query("SELECT terms_version FROM users WHERE id=$1", [req.auth.sub]);
@@ -122,6 +130,7 @@ app.post("/api/auth/register", authLimiter, async (req, res, next) => {
     const passwordHash = await bcrypt.hash(password, 12);
     const result = await query("INSERT INTO users (email, password_hash, terms_version, terms_accepted_at) VALUES ($1, $2, $3, NOW()) RETURNING id, email, role, terms_version AS \"termsVersion\"", [email, passwordHash, CURRENT_TERMS_VERSION]);
     issueSession(res, result.rows[0]);
+    await logSiteActivity({ eventType: "account.created", actorId: result.rows[0].id, summary: "A new account was created." });
     res.status(201).json({ user: result.rows[0] });
   } catch (error) {
     if (error.code === "23505") return res.status(409).json({ error: "An account with that email already exists." });
@@ -136,6 +145,7 @@ app.post("/api/auth/login", authLimiter, async (req, res, next) => {
     const user = result.rows[0];
     if (!user || !(await bcrypt.compare(password, user.password_hash))) return res.status(401).json({ error: "Email or password is incorrect." });
     issueSession(res, user);
+    await logSiteActivity({ eventType: "account.signed_in", actorId: user.id, summary: "An account signed in." });
     res.json({ user: { id: user.id, email: user.email, role: user.role, termsVersion: user.termsVersion } });
   } catch (error) { next(error); }
 });
@@ -212,6 +222,7 @@ app.post("/api/legal/accept-terms", requireAuth, async (req, res, next) => {
     const accepted = z.object({ accepted: z.literal(true), termsVersion: z.literal(CURRENT_TERMS_VERSION) }).parse(req.body);
     const result = await query('UPDATE users SET terms_version=$1, terms_accepted_at=NOW() WHERE id=$2 RETURNING id, email, role, terms_version AS "termsVersion", terms_accepted_at AS "termsAcceptedAt"', [accepted.termsVersion, req.auth.sub]);
     if (!result.rows[0]) return res.status(401).json({ error: "Account no longer exists." });
+    await logSiteActivity({ eventType: "terms.accepted", actorId: req.auth.sub, summary: "Current Terms and Conditions were accepted." });
     res.json({ user: result.rows[0] });
   } catch (error) { next(error); }
 });
@@ -274,6 +285,7 @@ app.post("/api/listings", requireAuth, requireCurrentTerms, async (req, res, nex
     const listingImages = [...listing.images].sort((left, right) => viewOrder[left.view] - viewOrder[right.view]);
     const imageUrl = listingImages[0].url;
     const result = await query("INSERT INTO listings (owner_id,title,description,make,model,year,location,transmission,fuel,body,price,type,image_url,images,contact_email,contact_phone,status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb,$15,$16,'active') RETURNING *", [req.auth.sub, listing.title, listing.description, listing.make, listing.model, listing.year, listing.location, listing.transmission, listing.fuel, listing.body, listing.price, listing.type, imageUrl, JSON.stringify(listingImages), listing.contactEmail, listing.contactPhone]);
+    await logSiteActivity({ eventType: "listing.created", actorId: req.auth.sub, listingId: result.rows[0].id, summary: `A ${listing.type === "sale" ? "sale" : "rental"} vehicle was listed: ${listing.title}.`, details: { title: listing.title, type: listing.type }, isNotification: true });
     res.status(201).json({ listing: result.rows[0] });
   } catch (error) { next(error); }
 });
@@ -292,6 +304,7 @@ app.post("/api/listings/:id/inquiries", requireAuth, requireCurrentTerms, inquir
       "INSERT INTO listing_inquiries (listing_id,buyer_id,buyer_phone,message) VALUES ($1,$2,$3,$4) RETURNING id,created_at",
       [car.id, req.auth.sub, inquiry.phone, inquiry.message],
     );
+    await logSiteActivity({ eventType: "sale.inquiry", actorId: req.auth.sub, listingId: car.id, summary: `A buyer sent an inquiry for ${car.title}.`, details: { title: car.title, type: "sale" }, isNotification: true });
     const notificationSent = await sendOwnerEmail({
       to: car.contact_email,
       subject: `New interest in ${car.title.replace(/[\r\n]+/g, " ").slice(0, 100)}`,
@@ -322,10 +335,16 @@ app.patch("/api/owner/listings/:id/status", requireAuth, requireCurrentTerms, as
       `UPDATE listings
        SET status=CASE WHEN $3='take_down' THEN 'paused' WHEN $3='restore' THEN 'active' WHEN type='sale' THEN 'sold' ELSE 'rented' END, updated_at=NOW()
        WHERE id=$1 AND owner_id=$2 AND (($3='take_down' AND status='active') OR ($3='restore' AND status='paused') OR ($3='complete' AND status='active'))
-       RETURNING id,type,status`,
+       RETURNING id,type,status,title`,
       [id, req.auth.sub, action],
     );
-    if (updated.rows[0]) return res.json({ listing: updated.rows[0] });
+    if (updated.rows[0]) {
+      const row = updated.rows[0];
+      const eventType = action === "complete" ? (row.type === "sale" ? "vehicle.sold" : "vehicle.rented") : action === "take_down" ? "listing.paused" : "listing.restored";
+      const verb = action === "complete" ? (row.type === "sale" ? "marked sold" : "marked rented") : action === "take_down" ? "taken down by its owner" : "restored by its owner";
+      await logSiteActivity({ eventType, actorId: req.auth.sub, listingId: row.id, summary: `A vehicle was ${verb}: ${row.title}.`, details: { title: row.title, type: row.type }, isNotification: action === "complete" });
+      return res.json({ listing: row });
+    }
     const existing = await query("SELECT type FROM listings WHERE id=$1 AND owner_id=$2", [id, req.auth.sub]);
     if (!existing.rows[0]) return res.status(404).json({ error: "Listing not found." });
     const noun = existing.rows[0].type === "sale" ? "sale" : "rental";
@@ -336,12 +355,13 @@ app.patch("/api/owner/listings/:id/status", requireAuth, requireCurrentTerms, as
 app.delete("/api/owner/listings/:id", requireAuth, requireCurrentTerms, async (req, res, next) => {
   try {
     const id = z.string().uuid().parse(req.params.id);
-    const listing = await query("SELECT id,type,images,image_url AS \"imageUrl\" FROM listings WHERE id=$1 AND owner_id=$2", [id, req.auth.sub]);
+    const listing = await query("SELECT id,title,type,images,image_url AS \"imageUrl\" FROM listings WHERE id=$1 AND owner_id=$2", [id, req.auth.sub]);
     if (!listing.rows[0]) return res.status(404).json({ error: "Listing not found." });
     const images = Array.isArray(listing.rows[0].images) ? listing.rows[0].images : [];
     const imageRecords = images.length ? images : listing.rows[0].imageUrl ? [{ url: listing.rows[0].imageUrl }] : [];
     const deleted = await query("DELETE FROM listings WHERE id=$1 AND owner_id=$2 RETURNING id,type", [id, req.auth.sub]);
     if (!deleted.rows[0]) return res.status(404).json({ error: "Listing not found." });
+    await logSiteActivity({ eventType: "listing.deleted", actorId: req.auth.sub, summary: `A vehicle listing was deleted: ${listing.rows[0].title}.`, details: { title: listing.rows[0].title, type: listing.rows[0].type } });
     const imagesRemoved = await deleteListingPhotos(imageRecords, req.auth.sub);
     res.json({ deleted: deleted.rows[0], imagesRemoved });
   } catch (error) { next(error); }
@@ -403,6 +423,7 @@ app.post("/api/bookings", requireAuth, requireCurrentTerms, async (req, res, nex
     const created = await client.query("INSERT INTO bookings (listing_id,renter_id,starts_at,ends_at,renter_phone) VALUES ($1,$2,$3,$4,$5) RETURNING id,listing_id,starts_at,ends_at,status,renter_phone", [booking.listingId, req.auth.sub, start, end, booking.phone]);
     await client.query("COMMIT");
     const car = listing.rows[0];
+    await logSiteActivity({ eventType: "rental.requested", actorId: req.auth.sub, listingId: car.id, summary: `A rental was requested for ${car.title}.`, details: { title: car.title, type: "rent" }, isNotification: true });
     const notificationSent = await sendOwnerEmail({
       to: car.contact_email,
       subject: `New rental request for ${car.title.replace(/[\r\n]+/g, " ").slice(0, 100)}`,
@@ -410,6 +431,56 @@ app.post("/api/bookings", requireAuth, requireCurrentTerms, async (req, res, nex
     });
     res.status(201).json({ booking: created.rows[0], notificationSent, sellerContact: { email: car.contact_email, phone: car.contact_phone } });
   } catch (error) { await client.query("ROLLBACK"); next(error); } finally { client.release(); }
+});
+
+app.get("/api/admin/overview", requireAuth, requireCurrentTerms, requireAdmin, async (_req, res, next) => {
+  try {
+    const result = await query(`SELECT
+      (SELECT COUNT(*) FROM listings)::int AS "totalVehicles",
+      (SELECT COUNT(*) FROM listings WHERE status='active')::int AS "availableVehicles",
+      (SELECT COUNT(*) FROM listings WHERE status='sold')::int AS "soldVehicles",
+      (SELECT COUNT(*) FROM listings WHERE status='rented')::int AS "rentedVehicles",
+      (SELECT COUNT(*) FROM listings WHERE status='pending')::int AS "pendingReview",
+      (SELECT COUNT(*) FROM listings WHERE status IN ('removed','rejected'))::int AS "moderatedVehicles",
+      (SELECT COUNT(*) FROM users)::int AS "accounts",
+      (SELECT COUNT(*) FROM listing_inquiries)::int AS "saleInquiries",
+      (SELECT COUNT(*) FROM bookings)::int AS "rentalRequests",
+      (SELECT COUNT(*) FROM site_activity_events)::int AS "activityEvents"`);
+    res.json({ overview: result.rows[0] });
+  } catch (error) { next(error); }
+});
+
+app.get("/api/admin/activity", requireAuth, requireCurrentTerms, requireAdmin, async (req, res, next) => {
+  try {
+    const { page, pageSize } = z.object({ page: z.coerce.number().int().min(1).default(1), pageSize: z.coerce.number().int().min(1).max(100).default(30) }).parse(req.query);
+    const [events, total] = await Promise.all([
+      query(`SELECT e.id,e.event_type AS "eventType",e.summary,e.details,e.is_notification AS "isNotification",e.created_at AS "createdAt",u.email AS "actorEmail",r.read_at AS "readAt"
+        FROM site_activity_events e LEFT JOIN users u ON u.id=e.actor_id LEFT JOIN admin_activity_reads r ON r.event_id=e.id AND r.admin_id=$1
+        ORDER BY e.created_at DESC LIMIT $2 OFFSET $3`, [req.auth.sub, pageSize, (page - 1) * pageSize]),
+      query("SELECT COUNT(*)::int AS total FROM site_activity_events"),
+    ]);
+    res.json({ events: events.rows, total: total.rows[0].total, page, pageSize });
+  } catch (error) { next(error); }
+});
+
+app.get("/api/admin/notifications", requireAuth, requireCurrentTerms, requireAdmin, async (req, res, next) => {
+  try {
+    const [events, count] = await Promise.all([
+      query(`SELECT e.id,e.event_type AS "eventType",e.summary,e.created_at AS "createdAt",e.listing_id AS "listingId"
+        FROM site_activity_events e WHERE e.is_notification AND NOT EXISTS (SELECT 1 FROM admin_activity_reads r WHERE r.event_id=e.id AND r.admin_id=$1)
+        ORDER BY e.created_at DESC LIMIT 100`, [req.auth.sub]),
+      query("SELECT COUNT(*)::int AS total FROM site_activity_events e WHERE e.is_notification AND NOT EXISTS (SELECT 1 FROM admin_activity_reads r WHERE r.event_id=e.id AND r.admin_id=$1)", [req.auth.sub]),
+    ]);
+    res.json({ notifications: events.rows, unreadCount: count.rows[0].total });
+  } catch (error) { next(error); }
+});
+
+app.post("/api/admin/notifications/read", requireAuth, requireCurrentTerms, requireAdmin, async (req, res, next) => {
+  try {
+    const { eventIds } = z.object({ eventIds: z.array(z.string().uuid()).max(100) }).parse(req.body);
+    if (eventIds.length) await query(`INSERT INTO admin_activity_reads (event_id,admin_id) SELECT e.id,$1 FROM site_activity_events e WHERE e.id=ANY($2::uuid[]) AND e.is_notification ON CONFLICT DO NOTHING`, [req.auth.sub, eventIds]);
+    res.status(204).end();
+  } catch (error) { next(error); }
 });
 
 app.get("/api/admin/listings", requireAuth, requireCurrentTerms, requireAdmin, async (_req, res, next) => {
@@ -426,8 +497,9 @@ app.patch("/api/admin/listings/:id", requireAuth, requireCurrentTerms, requireAd
     const current = await client.query("SELECT id,status FROM listings WHERE id=$1 FOR UPDATE", [id]);
     if (!current.rows[0]) { await client.query("ROLLBACK"); return res.status(404).json({ error: "Listing not found." }); }
     if (["sold", "rented"].includes(current.rows[0].status)) { await client.query("ROLLBACK"); return res.status(409).json({ error: "Completed vehicle listings cannot be changed." }); }
-    const updated = await client.query("UPDATE listings SET status=$1,updated_at=NOW() WHERE id=$2 RETURNING id,status", [status,id]);
+    const updated = await client.query("UPDATE listings SET status=$1,updated_at=NOW() WHERE id=$2 RETURNING id,status,title,type", [status,id]);
     await client.query("INSERT INTO listing_moderation_events (listing_id,admin_id,previous_status,new_status,reason) VALUES ($1,$2,$3,$4,$5)", [id,req.auth.sub,current.rows[0].status,status,reason.trim()]);
+    await logSiteActivity({ eventType: "listing.moderated", actorId: req.auth.sub, listingId: id, summary: `An administrator changed ${updated.rows[0].title} to ${status}.`, details: { title: updated.rows[0].title, type: updated.rows[0].type, status, reason: reason.trim() } }, client);
     await client.query("COMMIT");
     res.json({ listing: updated.rows[0] });
   } catch (error) { try { await client.query("ROLLBACK"); } catch {} next(error); }

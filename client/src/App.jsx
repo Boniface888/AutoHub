@@ -44,8 +44,11 @@ function App() {
   const [myListingsOpen, setMyListingsOpen] = useState(false);
   const [hasListings, setHasListings] = useState(false);
   const [requestCount, setRequestCount] = useState(0);
+  const [adminNotificationCount, setAdminNotificationCount] = useState(0);
   const knownUnreadRequests = useRef(new Set());
   const hasRequestBaseline = useRef(false);
+  const knownAdminNotifications = useRef(new Set());
+  const hasAdminNotificationBaseline = useRef(false);
   const [listingRefresh, setListingRefresh] = useState(0);
   const [user, setUser] = useState(null);
   const [termsOperator, setTermsOperator] = useState({});
@@ -110,6 +113,36 @@ function App() {
   }, [user]);
 
   useEffect(() => {
+    if (user?.role !== "admin" || user.termsVersion !== CURRENT_TERMS_VERSION) {
+      knownAdminNotifications.current = new Set();
+      hasAdminNotificationBaseline.current = false;
+      return undefined;
+    }
+    let active = true;
+    async function refreshAdminNotifications() {
+      try {
+        const response = await fetch(`${apiBase}/api/admin/notifications`, { credentials: "include" });
+        if (!response.ok) return;
+        const data = await response.json();
+        if (!active) return;
+        const current = new Set(data.notifications.map((item) => item.id));
+        if (hasAdminNotificationBaseline.current) {
+          const newest = data.notifications.find((item) => !knownAdminNotifications.current.has(item.id));
+          if (newest) setNotice(`Admin alert: ${newest.summary}`);
+        }
+        knownAdminNotifications.current = current;
+        hasAdminNotificationBaseline.current = true;
+        setAdminNotificationCount(data.unreadCount);
+      } catch { /* Keep the latest alert count while offline. */ }
+    }
+    const onRead = () => { knownAdminNotifications.current = new Set(); setAdminNotificationCount(0); };
+    window.addEventListener("autohub-admin-notifications-read", onRead);
+    void refreshAdminNotifications();
+    const timer = window.setInterval(refreshAdminNotifications, 30_000);
+    return () => { active = false; window.clearInterval(timer); window.removeEventListener("autohub-admin-notifications-read", onRead); };
+  }, [user]);
+
+  useEffect(() => {
     fetch(apiBase + "/api/legal/terms")
       .then((response) => response.ok ? response.json() : null)
       .then((data) => { if (data?.operator) setTermsOperator(data.operator); })
@@ -154,7 +187,7 @@ function App() {
   }, []);
   return (
     <>
-      <Navbar user={user} hasListings={hasListings} requestCount={requestCount} onChoose={(type) => { update({ type }); document.getElementById("browse")?.scrollIntoView({ behavior: "smooth" }); }} onAction={(action) => action === "logout" ? fetch(`${apiBase}/api/auth/logout`, { method: "POST", credentials: "include" }).then(() => { setUser(null); setRequestCount(0); setHasListings(false); }) : action === "admin" ? setAdminOpen(true) : action === "my-listings" ? setMyListingsOpen(true) : action === "requests" ? setRequestInboxOpen(true) : action === "list-section" ? document.getElementById("list-your-car")?.scrollIntoView({ behavior: "smooth" }) : action === "sell" && user ? (setListingType("sale"), setListingOpen(true)) : setAuthMode(action === "sell" ? "signup" : action)} />
+      <Navbar user={user} hasListings={hasListings} requestCount={requestCount} adminNotificationCount={adminNotificationCount} onChoose={(type) => { update({ type }); document.getElementById("browse")?.scrollIntoView({ behavior: "smooth" }); }} onAction={(action) => action === "logout" ? fetch(`${apiBase}/api/auth/logout`, { method: "POST", credentials: "include" }).then(() => { setUser(null); setRequestCount(0); setAdminNotificationCount(0); setHasListings(false); }) : action === "admin" ? setAdminOpen(true) : action === "my-listings" ? setMyListingsOpen(true) : action === "requests" ? setRequestInboxOpen(true) : action === "list-section" ? document.getElementById("list-your-car")?.scrollIntoView({ behavior: "smooth" }) : action === "sell" && user ? (setListingType("sale"), setListingOpen(true)) : setAuthMode(action === "sell" ? "signup" : action)} />
       <main>
         <Hero user={user} onChoose={(type) => { update({ type }); document.getElementById("browse")?.scrollIntoView({ behavior: "smooth" }); }} />
         {user && termsAccepted && (

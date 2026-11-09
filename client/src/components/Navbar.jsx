@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-function Navbar({ user, hasListings = false, requestCount = 0, onChoose = () => {}, onAction = () => {} }) {
+function Navbar({ user, hasListings = false, requestCount = 0, adminNotificationCount = 0, onChoose = () => {}, onAction = () => {} }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const handleChoose = (type) => {
@@ -40,7 +40,7 @@ function Navbar({ user, hasListings = false, requestCount = 0, onChoose = () => 
         {user ? (
           <>
             {user.role === "admin" && (
-              <button className="login-button" onClick={() => handleAction("admin")}>Admin</button>
+              <button className="login-button" onClick={() => handleAction("admin")}>Admin{adminNotificationCount > 0 && <span className="nav-request-count" aria-label={`${adminNotificationCount} unread admin alerts`}>{adminNotificationCount > 99 ? "99+" : adminNotificationCount}</span>}</button>
             )}
             <span className="account-email">{user.email}</span>
             <button className="login-button" onClick={() => handleAction("logout")}>Log out</button>

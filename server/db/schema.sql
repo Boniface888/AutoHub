@@ -97,3 +97,51 @@ CREATE TABLE IF NOT EXISTS listing_moderation_events (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS listing_moderation_events_listing_idx ON listing_moderation_events (listing_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS site_activity_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  source_key TEXT UNIQUE,
+  event_type TEXT NOT NULL,
+  actor_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  listing_id UUID REFERENCES listings(id) ON DELETE SET NULL,
+  summary TEXT NOT NULL,
+  details JSONB NOT NULL DEFAULT '{}'::jsonb,
+  is_notification BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS site_activity_events_created_idx ON site_activity_events (created_at DESC);
+CREATE INDEX IF NOT EXISTS site_activity_events_notifications_idx ON site_activity_events (created_at DESC) WHERE is_notification;
+
+CREATE TABLE IF NOT EXISTS admin_activity_reads (
+  event_id UUID NOT NULL REFERENCES site_activity_events(id) ON DELETE CASCADE,
+  admin_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  read_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (event_id, admin_id)
+);
+
+ALTER TABLE site_activity_events ADD COLUMN IF NOT EXISTS source_key TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS site_activity_events_source_key_idx ON site_activity_events (source_key) WHERE source_key IS NOT NULL;
+
+INSERT INTO site_activity_events (source_key,event_type,actor_id,listing_id,summary,details,created_at)
+SELECT 'backfill:account:'||u.id::text,'account.created',u.id,NULL,'An account was created.','{}'::jsonb,u.created_at FROM users u
+ON CONFLICT DO NOTHING;
+INSERT INTO site_activity_events (source_key,event_type,actor_id,listing_id,summary,details,created_at)
+SELECT 'backfill:listing:'||l.id::text,'listing.created',l.owner_id,l.id,
+  CASE WHEN l.type='sale' THEN 'A sale vehicle was listed: ' ELSE 'A rental vehicle was listed: ' END||l.title,
+  jsonb_build_object('title',l.title,'type',l.type),l.created_at FROM listings l
+ON CONFLICT DO NOTHING;
+INSERT INTO site_activity_events (source_key,event_type,actor_id,listing_id,summary,details,created_at)
+SELECT 'backfill:completion:'||l.id::text,CASE WHEN l.status='sold' THEN 'vehicle.sold' ELSE 'vehicle.rented' END,l.owner_id,l.id,
+  CASE WHEN l.status='sold' THEN 'A vehicle was marked sold: ' ELSE 'A vehicle was marked rented: ' END||l.title,
+  jsonb_build_object('title',l.title,'type',l.type),l.updated_at FROM listings l WHERE l.status IN ('sold','rented')
+ON CONFLICT DO NOTHING;
+INSERT INTO site_activity_events (source_key,event_type,actor_id,listing_id,summary,details,created_at)
+SELECT 'backfill:inquiry:'||i.id::text,'sale.inquiry',i.buyer_id,i.listing_id,'A buyer sent an inquiry for '||l.title||'.',jsonb_build_object('title',l.title,'type','sale'),i.created_at
+FROM listing_inquiries i JOIN listings l ON l.id=i.listing_id ON CONFLICT DO NOTHING;
+INSERT INTO site_activity_events (source_key,event_type,actor_id,listing_id,summary,details,created_at)
+SELECT 'backfill:booking:'||b.id::text,'rental.requested',b.renter_id,b.listing_id,'A rental was requested for '||l.title||'.',jsonb_build_object('title',l.title,'type','rent'),b.created_at
+FROM bookings b JOIN listings l ON l.id=b.listing_id ON CONFLICT DO NOTHING;
+INSERT INTO site_activity_events (source_key,event_type,actor_id,listing_id,summary,details,created_at)
+SELECT 'backfill:moderation:'||m.id::text,'listing.moderated',m.admin_id,m.listing_id,
+  'An administrator changed a vehicle listing to '||m.new_status||'.',jsonb_build_object('status',m.new_status,'reason',m.reason),m.created_at
+FROM listing_moderation_events m ON CONFLICT DO NOTHING;
